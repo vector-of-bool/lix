@@ -1,0 +1,6 @@
+#ifndef LET_PARSER_PARSER_HPP_INCLUDED
+#define LET_PARSER_PARSER_HPP_INCLUDED
+
+#include "parse.hpp"
+
+#endif // LET_PARSER_PARSER_HPP_INCLUDED
