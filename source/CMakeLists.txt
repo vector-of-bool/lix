@@ -16,7 +16,7 @@ add_library(let-parser STATIC
     let/parser/node.cpp
     )
 add_library(let::parser ALIAS let-parser)
-target_link_libraries(let-parser PRIVATE tao::pegtl)
+target_link_libraries(let-parser PUBLIC let::base PRIVATE tao::pegtl)
 
 add_executable(let-parse let/parser/parse-main.cpp)
 target_link_libraries(let-parse PRIVATE let::parser)

@@ -1,13 +1,9 @@
 #include "parse.hpp"
 
-#include <let/lex/token.hpp>
-
 #include <iostream>
 #include <optional>
 #include <sstream>
 #include <stack>
-
-using token_iter = std::vector<let::lex::token_view>::const_iterator;
 
 using namespace let;
 using namespace let::ast;
