@@ -4,6 +4,9 @@ project(let VERSION 0.0.0)
 include(CTest)
 enable_testing()
 
+
+include(extern/extern.cmake)
+
 add_subdirectory(source)
 
 if(BUILD_TESTING)

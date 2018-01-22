@@ -1,14 +1,18 @@
 #ifndef LET_PARSER_PARSE_HPP_INCLUDED
 #define LET_PARSER_PARSE_HPP_INCLUDED
 
+#include <let/string_view.hpp>
+
 #include "node.hpp"
 
-#include <string_view>
+namespace let::ast {
 
-namespace let {
+node parse(std::string_view::iterator first, std::string_view::iterator last);
 
-ast::node parse_string(std::string_view str);
+inline node parse(std::string_view str) {
+    return parse(str.begin(), str.end());
+}
 
-} // namespace let
+}  // namespace let::ast
 
-#endif // LET_PARSER_PARSE_HPP_INCLUDED
+#endif  // LET_PARSER_PARSE_HPP_INCLUDED
