@@ -98,6 +98,19 @@ struct inout_action {
     static void exit(States&&...) {}
 };
 
+class det_parser_error : std::exception {
+    pegtl::position _position;
+    std::string     _message;
+
+public:
+    det_parser_error(pegtl::position pos, std::string message)
+        : _position(pos)
+        , _message(message) {}
+
+    std::string            message() const { return _message; }
+    const pegtl::position& position() const { return _position; }
+};
+
 /**
  * Parser state is kept while we parse over a document. It keeps track of
  * several things while running. Reach the docs on each member to find out more.
@@ -277,54 +290,6 @@ public:
 };
 
 using hspace = star<blank>;
-/**
- * Rule that consumes as much horizontal space as possible.
- */
-// struct hspace {
-//     using analyze_t = pegtl::analysis::generic<pegtl::analysis::rule_type::OPT>;
-//     template <typename Input>
-//     static bool match(Input& in) {
-//         auto ptr        = in.current();
-//         auto to_check   = in.size();
-//         int  n_consumed = 0;
-//         while (to_check-- && std::isspace(*ptr) && *ptr != '\n') {
-//             ++n_consumed;
-//             ++ptr;
-//         }
-//         in.bump(n_consumed);
-//         return true;
-//     }
-// };
-
-// template <std::size_t ID>
-// struct norecurse_check : success {};
-
-// template <std::size_t ID>
-// struct action<norecurse_check<ID>> {
-//     template <typename Input>
-//     static bool apply(Input&&, parser_state& st) {
-//         return st.not_recursing_on(ID);
-//     }
-// }
-
-// template <typename Rule, std::size_t ID>
-// struct norecurse_wrap : seq<Rule> {};
-
-// template <typename Rule, std::size_t ID>
-// struct inout_action<norecurse_wrap<Rule, ID>> {
-//     template <typename Input>
-//     static void(Input&&, parser_state& st) {
-//         st.recurse_set(ID);
-//     }
-
-//     template <typename Input>
-//     static void(Input&&, parser_state& st) {
-
-//     }
-// };
-
-// template <typename Rule, std::size_t ID>
-// struct norecurse : seq<norecurse_check<ID>, norecurse_wrap<Rule, ID>> {};
 
 /**
  * Rule that consumes at least one horizontal space
@@ -1061,7 +1026,13 @@ ACTION(identifier) { st.push(symbol(in.string())); }
 ACTION(lit_tall_sym) { st.push(symbol(in.string())); }
 ACTION(lit_small_sym) { st.push(symbol(in.string().substr(1))); }
 // TODO: Remove digit separators from strings:
-ACTION(lit_int) { st.push(node(integer(std::stoll(in.string())))); }
+ACTION(lit_int) {
+    try {
+        st.push(node(integer(std::stoll(in.string()))));
+    } catch (std::out_of_range) {
+        throw det_parser_error(in.position(), "Integer value is too large");
+    }
+}
 ACTION(lit_float) { st.push(node(floating(std::stod(in.string())))); }
 // Action for keyword blocks. This will append the keyword argument for the
 // block to the current keyword list at the top of the stack.
@@ -1137,19 +1108,6 @@ MARK_LOGGED(let_doc);
 
 SET_ERROR_MESSAGE(block_expr, "Expected one or more expressions.");
 SET_ERROR_MESSAGE(eof, "Expected end-of-file");
-
-class det_parser_error : std::exception {
-    pegtl::position _position;
-    std::string     _message;
-
-public:
-    det_parser_error(pegtl::position pos, std::string message)
-        : _position(pos)
-        , _message(message) {}
-
-    std::string            message() const { return _message; }
-    const pegtl::position& position() const { return _position; }
-};
 
 template <typename Rule>
 struct let_pegtl_controller : pegtl::normal<Rule> {
