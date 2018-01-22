@@ -21,4 +21,9 @@ target_link_libraries(let-parser PUBLIC let::base PRIVATE tao::pegtl)
 add_executable(let-parse let/parser/parse-main.cpp)
 target_link_libraries(let-parse PRIVATE let::parser)
 
-target_include_directories(let-parser PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+add_library(let-rt STATIC
+    let/boxed.hpp
+    let/boxed.cpp
+    )
+add_library(let::rt ALIAS let-rt)
+target_link_libraries(let-rt PUBLIC let::base)
