@@ -75,6 +75,16 @@ struct action : pegtl::nothing<Rule> {};
 
 struct _dummy;  // <-- Just to fix some highlighting errors in VSCode
 
+template <typename Rule>
+struct fail_message;
+
+#define SET_ERROR_MESSAGE(rule, message)                                                           \
+    template <>                                                                                    \
+    struct fail_message<rule> {                                                                    \
+        static std::string string() { return #message; }                                           \
+    };                                                                                             \
+    static_assert(true)
+
 /**
  * An action type used by our custom controller that lets rules perform
  * arbitrary actions when entering/existing their parse state. No distinction is
@@ -471,6 +481,9 @@ struct lit_hex_int : if_must<STR("0x"), plus<cls_digit<xdigit>>> {};
 struct lit_oct_int : if_must<STR("0c"), plus<cls_digit<odigit>>> {};
 struct lit_bin_int : if_must<STR("0b"), plus<cls_digit<bdigit>>> {};
 struct lit_int : sor<lit_dec_int, lit_hex_int, lit_oct_int, lit_bin_int> {};
+SET_ERROR_MESSAGE(plus<cls_digit<xdigit>>, "Expected hexidecimal digit sequence");
+SET_ERROR_MESSAGE(plus<cls_digit<odigit>>, "Expected octal digit sequence");
+SET_ERROR_MESSAGE(plus<cls_digit<bdigit>>, "Expected binary digit sequence");
 
 /**
  * We parse floats simply by looking for a decimal number, a dot, then another decimal
@@ -505,15 +518,13 @@ struct action<keyword_list_args<Keywords...>> {
 };
 
 struct keyword_arg_id : seq<ident_base> {};
-ACTION(keyword_arg_id) {
-    st.push(symbol(in.string()));
-}
+ACTION(keyword_arg_id) { st.push(symbol(in.string())); }
 struct keyword_arg : seq<keyword_arg_id, one<':'>, ws, single_ex> {};
 MARK_RESTORING(keyword_arg);
 MARK_LOGGED(keyword_arg);
 ACTION(keyword_arg) {
-    auto value = st.pop();
-    auto key = st.pop();
+    auto       value = st.pop();
+    auto       key   = st.pop();
     ast::tuple tup;
     tup.nodes.push_back(std::move(key));
     tup.nodes.push_back(std::move(value));
@@ -531,32 +542,24 @@ ACTION(lit_tuple_elem) {
     st.push_to_list(std::move(el));
 }
 
-struct lit_tuple_tail :
-    sor<
-        seq<
-            lit_tuple_elem,
-            ws,
-            sor<
-                // End of tuple:
-                one<'}'>,
-                // Comma:
-                if_must<one<','>, ws, lit_tuple_tail>
-            >
-        >,
-        seq<
-            opt<keyword_list_args<list_tail<keyword_arg, one<','>, space>>>,
-            one<'}'>
-        >
-    >
-{};
+struct lit_tuple_tail : sor<
+                            // Try for a regular tuple element:
+                            seq<lit_tuple_elem,
+                                ws,
+                                sor<
+                                    // End of tuple:
+                                    one<'}'>,
+                                    // Comma:
+                                    seq<one<','>, ws, lit_tuple_tail>>>,
+                            // Or...
+                            seq<
+                                // We might have an embeded keyword list:
+                                opt<keyword_list_args<list_tail<keyword_arg, one<','>, space>>>,
+                                // Then the tuple close:
+                                one<'}'>>> {};
+SET_ERROR_MESSAGE(lit_tuple_tail, "Expected tuple element, keyword list, or closing \"}\"");
 
-struct lit_tuple :
-    if_must<
-        one<'{'>,
-        meta_prep_arglist,
-        lit_tuple_tail
-    >
-{};
+struct lit_tuple : if_must<seq<one<'{'>, meta_prep_arglist>, lit_tuple_tail> {};
 ACTION(lit_tuple) {
     auto nodes = st.pop();
     assert(nodes.as_list());
@@ -575,29 +578,16 @@ ACTION(lit_list_elem) {
     st.push_to_list(std::move(elem));
 }
 
-struct lit_list_tail :
-    sor<
-        seq<
-            sor<lit_list_elem, keyword_arg>,
-            ws,
-            sor<
-                // End of list:
-                one<']'>,
-                // Comma:
-                if_must<one<','>, ws, lit_list_tail>
-            >
-        >,
-        one<']'>
-    >
-{};
-
-struct lit_list :
-    if_must<
-        one<'['>,
-        meta_prep_arglist,
-        lit_list_tail
-    >
-{};
+struct lit_list_tail : sor<seq<sor<lit_list_elem, keyword_arg>,
+                               ws,
+                               sor<
+                                   // End of list:
+                                   one<']'>,
+                                   // Comma:
+                                   if_must<seq<one<','>, ws>, lit_list_tail>>>,
+                           one<']'>> {};
+struct lit_list : if_must<seq<one<'['>, meta_prep_arglist>, lit_list_tail> {};
+SET_ERROR_MESSAGE(lit_list_tail, "Expected list element, keyword pair, or closing ']'");
 
 struct lit_string : failure {};
 
@@ -609,14 +599,14 @@ struct block_expr;
  * the tail.
  */
 template <typename Keyword>
-struct keyword_block_head : if_must<Keyword, ws, block_expr> {};
+struct keyword_block_head : seq<Keyword, ws, must<block_expr>> {};
 
 /**
  * A keyword block is block prefixed by a keyword (do, else, finally, etc.)
  * followed by a block expression.
  */
 template <typename Keyword>
-struct keyword_block : if_must<keyword_block_head<Keyword>, ws, struct keyword_block_tail> {};
+struct keyword_block : seq<keyword_block_head<Keyword>, ws, must<struct keyword_block_tail>> {};
 
 /**
  * other_keyword_block is a keyword block for any keyword except "do", since that
@@ -629,6 +619,7 @@ using other_keyword_block = sor<keyword_block<kw_else>>;
  * block list by finding the `end` keyword
  */
 struct keyword_block_tail : sor<other_keyword_block, kw_end> {};
+SET_ERROR_MESSAGE(keyword_block_tail, "Expected continuation block or 'end' following block");
 
 /**
  * We distinguish "do" blocks since they begin a sequence of keyword block
@@ -652,7 +643,7 @@ struct no_paren_args_kw_tail :
         keyword_arg,
         sor<
             // After that keyword-arg, check for some more
-            seq<hspace, if_must<one<','>, ws, no_paren_args_kw_tail>>,
+            seq<hspace, one<','>, ws, must<no_paren_args_kw_tail>>,
             // If we didn't find another keyword-arg, parse a do-block
             seq<meta_in_l1_unmatched, hspace, do_block>,
             // If we didn't parse anything else, we're done.
@@ -660,6 +651,7 @@ struct no_paren_args_kw_tail :
         >
     >
 {};
+SET_ERROR_MESSAGE(no_paren_args_kw_tail, "Expected a keyword argument");
 
 struct no_paren_args_tail :
     sor<
@@ -671,7 +663,7 @@ struct no_paren_args_tail :
             sor<
                 // If we encounter a comma, recurse to another argument:
                 // (Trailing commas are not allowed in no-paren calls)
-                seq<hspace, if_must<one<','>, ws, no_paren_args_tail>>,
+                seq<hspace, one<','>, ws, must<no_paren_args_tail>>,
                 // If we didn't, try to parse a do-block
                 opt<meta_in_l1_unmatched, hspace, do_block_no_kws>
             >
@@ -683,6 +675,7 @@ struct no_paren_args_tail :
         // If none of the above matched, we're not a no-paren call
     >
 {};
+SET_ERROR_MESSAGE(no_paren_args_tail, "Expected positional argument or keyword argument");
 
 /**
  * no_paren_args parses an list of unwrapped function call arguments. Unlike
@@ -731,7 +724,7 @@ struct paren_args_tail :
                 seq<
                     one<','>,
                     ws,
-                    paren_args_tail
+                    must<paren_args_tail>
                 >,
                 // Or we parse the closing parenthesis
                 seq<
@@ -752,16 +745,17 @@ struct paren_args_tail :
         >
     >
 {};
+SET_ERROR_MESSAGE(paren_args_tail, "Expected positional argument, keyword argument, or closing ')'");
 
 /**
  * This rule will parse a parenthesized list of function arguments, maybe with
  * a trailing do-block
  */
 struct paren_args :
-    if_must<
+    seq<
         one<'('>,
         ws,
-        paren_args_tail
+        must<paren_args_tail>
     >
 {};
 MARK_LOGGED(paren_args);
@@ -821,12 +815,14 @@ ACTION(ex_var) {
 /**
  * A parenthesis-wrapped expression. Anything can be inside!
  */
-struct ex_parenthesis : if_must<one<'('>, ws, struct block_expr, ws, one<')'>> {};
+struct ex_parenthesis : seq<one<'('>, ws, must<struct block_expr>, ws, must<one<')'>>> {};
+SET_ERROR_MESSAGE(one<')'>, "Expected closing parenthesis");
 
 /**
  * The basis expressions. No higher precedence than this!
  */
-struct ex_atomic : sor<ex_parenthesis, ex_var, lit_list, lit_tuple, lit_string, lit_number, lit_symbol> {};
+struct ex_atomic
+    : sor<ex_parenthesis, ex_var, lit_list, lit_tuple, lit_string, lit_number, lit_symbol> {};
 
 template <typename Rule>
 struct op_pad : seq<hspace, Rule, ws> {};
@@ -845,12 +841,15 @@ template <typename BinOp>
 struct binop_tail;
 
 template <typename Rule>
-struct binop_operator_inner : Rule {};
+struct binop_operator_inner : seq<Rule> {};
+
+template <typename Rule>
+struct binop_tail_rhs : seq<Rule> {};
 
 // How we define the two associativities:
 template <typename Operator, typename Operand, typename RHS>
 struct binop_tail<ex_binary_operator<Operator, Operand, left, RHS>>
-    : if_must<op_pad<binop_operator_inner<Operator>>, RHS> {};
+    : if_must<op_pad<binop_operator_inner<Operator>>, binop_tail_rhs<RHS>> {};
 // right:
 template <typename Operator, typename Operand>
 struct binop_tail<ex_binary_operator<Operator, Operand, right, Operand>>
@@ -858,6 +857,17 @@ struct binop_tail<ex_binary_operator<Operator, Operand, right, Operand>>
               ex_binary_operator<Operator, Operand, right, Operand>> {};
 
 }  // namespace detail
+
+template <typename Rule>
+struct fail_message<detail::binop_tail_rhs<Rule>> {
+    static std::string string() { return "Expected right-hand expression for binary operator"; }
+};
+
+template <typename Operator, typename Operand, typename Associativity, typename RHS>
+struct fail_message<ex_binary_operator<Operator, Operand, Associativity, RHS>> {
+    // XXX: We can make a better error messag than this, I think
+    static std::string string() { return "Expected right-hand expression for binary operator"; }
+};
 
 // Action to push the operator name onto the stack
 template <typename Rule>
@@ -905,9 +915,18 @@ struct ex_binary_operator
           star<detail::binop_tail<ex_binary_operator<Operator, Operand, Associativity, RHS>>>> {};
 
 struct ex_dot_access : seq<identifier> {};
+SET_ERROR_MESSAGE(ex_dot_access, "Expected identifier following dot '.'");
 
-struct ex_subscript_tail : if_must<one<'['>, ws, single_ex, ws, one<']'>> {};
-struct ex_dot_tail : if_must<one<'.'>, ws, ex_dot_access> {};
+struct ex_subscript_inner : sor<single_ex> {};
+SET_ERROR_MESSAGE(ex_subscript_inner, "Expected expression for subscript operation");
+
+struct ex_subscript_close : one<']'> {};
+SET_ERROR_MESSAGE(ex_subscript_close, "Expected closing ']' following subscript expression");
+
+struct ex_subscript_tail
+    : seq<one<'['>, ws, must<ex_subscript_inner>, ws, must<ex_subscript_close>> {};
+
+struct ex_dot_tail : seq<one<'.'>, ws, must<ex_dot_access>> {};
 struct ex_call_tail : seq<meta_prep_arglist, sor<paren_args, no_paren_args>> {};
 template <>
 struct inout_action<ex_call_tail> {
@@ -1113,8 +1132,24 @@ ACTION(ex_unary_) {
 /**
  * The root document definition
  */
-struct let_doc : must<ws, block_expr, ws, eof> {};
+struct let_doc : seq<ws, must<block_expr>, ws, must<eof>> {};
 MARK_LOGGED(let_doc);
+
+SET_ERROR_MESSAGE(block_expr, "Expected one or more expressions.");
+SET_ERROR_MESSAGE(eof, "Expected end-of-file");
+
+class det_parser_error : std::exception {
+    pegtl::position _position;
+    std::string     _message;
+
+public:
+    det_parser_error(pegtl::position pos, std::string message)
+        : _position(pos)
+        , _message(message) {}
+
+    std::string            message() const { return _message; }
+    const pegtl::position& position() const { return _position; }
+};
 
 template <typename Rule>
 struct let_pegtl_controller : pegtl::normal<Rule> {
@@ -1164,6 +1199,11 @@ struct let_pegtl_controller : pegtl::normal<Rule> {
 
     static void log_fail(std::false_type, parser_state&) {}
     static void log_fail(std::true_type, parser_state& st) { st.log_fail(rule_name<Rule>::name); }
+
+    template <typename Input>
+    static void raise(const Input& in, parser_state&) {
+        throw det_parser_error(in.position(), fail_message<Rule>::string());
+    }
 };
 
 }  // namespace
@@ -1173,9 +1213,28 @@ node let::ast::parse(std::string_view::iterator first, std::string_view::iterato
     auto                str = std::string(first, last);
     pegtl::memory_input in{str, str};
     parser_state        st;
-    pegtl::parse<let_doc, ::action, let_pegtl_controller>(in, st);
-    return st.finish();
-    pegtl::trace_state tr_st;
-    pegtl::parse<let_doc, pegtl::nothing, pegtl::tracer>(in, tr_st);
-    return node(symbol("null"));
+    try {
+        pegtl::parse<let_doc, ::action, let_pegtl_controller>(in, st);
+        return st.finish();
+    } catch (const det_parser_error& err) {
+        // Generate a nice error message for the people
+        auto& pos = err.position();
+        // Get a pointer to where the error happened:
+        auto dataptr = str.begin() + pos.byte;
+        // Find the line in the source string
+        auto line_start = dataptr;
+        auto line_end   = dataptr;
+        if (line_start != str.begin() && (line_start == str.end() || *line_start == '\n'))
+            --line_start;
+        // Walk until we find a newline
+        while (line_start != str.begin() && *line_start != '\n')
+            --line_start;
+        if (line_start != str.end() && *line_start == '\n')
+            ++line_start;
+        while (line_end != str.end() && *line_end != '\r' && *line_end != '\n')
+            ++line_end;
+        const auto full_line = std::string(line_start, line_end);
+        assert(full_line.size() >= pos.byte_in_line);
+        throw ast::parse_error(err.message(), pos.line, pos.byte_in_line, full_line);
+    }
 }

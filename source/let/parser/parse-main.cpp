@@ -9,8 +9,13 @@ int parse_istream(std::istream& in) {
     std::string code;
     using iter = std::istreambuf_iterator<char>;
     std::copy(iter(in), iter{}, std::back_inserter(code));
-    auto node = let::ast::parse(code);
-    std::cout << node << '\n';
+    try {
+        auto node = let::ast::parse(code);
+        std::cout << node << '\n';
+    } catch (const let::ast::parse_error& e) {
+        std::cerr << "FAIL:\n" << e.what() << '\n';
+        return 1;
+    }
     return 0;
 }
 }
