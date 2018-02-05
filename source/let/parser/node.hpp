@@ -2,6 +2,9 @@
 #define LET_PARSER_NODE_HPP_INCLUDED
 
 #include <let/symbol.hpp>
+#include <let/util.hpp>
+#include <let/util/opt_ref.hpp>
+#include <let/value_fwd.hpp>
 #include <let/variant.hpp>
 
 #include <ostream>
@@ -53,11 +56,9 @@ public:
 
 class node {
     using node_var = std::variant<list, tuple, integer, floating, symbol, call>;
-    std::unique_ptr<node_var> _var;
+    std::shared_ptr<const node_var> _var;
 
 public:
-    node(node&&)  = default;
-    node& operator=(node&&) = default;
     node(list l)
         : _var(std::make_unique<node_var>(std::move(l))) {}
     node(tuple t)
@@ -72,18 +73,14 @@ public:
         : _var(std::make_unique<node_var>(std::move(c))) {}
 
 #define DEF_OBS(type)                                                                              \
-    std::optional<std::reference_wrapper<const type>> as_##type() const {                          \
-        auto ptr = std::get_if<type>(_var.get());                                                  \
-        if (ptr == nullptr)                                                                        \
-            return std::nullopt;                                                                   \
-        return *ptr;                                                                               \
+    opt_ref<const type> as_##type() const& {                                                       \
+        if (auto ptr = std::get_if<type>(_var.get())) {                                            \
+            return *ptr;                                                                           \
+        } else {                                                                                   \
+            return nullopt;                                                                        \
+        }                                                                                          \
     }                                                                                              \
-    std::optional<std::reference_wrapper<type>> as_##type() {                                      \
-        auto ptr = std::get_if<type>(_var.get());                                                  \
-        if (ptr == nullptr)                                                                        \
-            return std::nullopt;                                                                   \
-        return *ptr;                                                                               \
-    }                                                                                              \
+    opt_ref<const type> as(tag<type>) const& noexcept { return as_##type(); }                      \
     static_assert(true)
 
     DEF_OBS(list);
@@ -94,19 +91,74 @@ public:
     DEF_OBS(call);
 #undef DEF_OBS
 
-    template <typename Fun>
-    decltype(auto) visit(Fun&& fn) const {
-        return std::visit(std::forward<Fun>(fn), *_var);
+    template <typename Fun, typename... Args>
+    decltype(auto) visit(Fun&& fn, Args&&... args) const {
+        return std::visit(
+            [&](auto&& item) -> decltype(auto) {
+                return std::forward<Fun>(fn)(item, std::forward<Args>(args)...);
+            },
+            *_var);
     }
+
+    inline node clone() const;
+
+    let::value  to_value() const;
+    static node from_value(const let::value&);
 };
 
 std::ostream& operator<<(std::ostream& o, const node& n);
-std::string to_string(const node& n);
+std::string   to_string(const node& n);
 
 call::call(node el, let::ast::meta m, node args)
     : _target(std::make_shared<node>(std::move(el)))
     , _meta(m)
     , _arguments(std::make_shared<node>(std::move(args))) {}
+
+namespace detail {
+
+struct node_clone_visitor {
+    node operator()(const list& l) {
+        std::vector<node> args;
+        for (auto& n : l.nodes) {
+            args.push_back(n.clone());
+        }
+        return node(list(std::move(args)));
+    }
+
+    node operator()(const tuple& tup) {
+        std::vector<node> args;
+        for (auto& n : tup.nodes) {
+            args.push_back(n.clone());
+        }
+        return node(tuple(std::move(args)));
+    }
+
+    node operator()(integer i) { return node(i); }
+    node operator()(floating f) { return node(f); }
+    node operator()(symbol s) { return node(s); }
+    node operator()(const call& c) {
+        return node(call(c.target().clone(), {}, c.arguments().clone()));
+    }
+};
+
+}  // namespace detail
+
+inline node node::clone() const { return visit(detail::node_clone_visitor()); }
+
+inline ast::node make_variable(const std::string_view& s) {
+    return ast::call(symbol(s), {}, symbol("Var"));
+}
+
+inline ast::node make_assignment(const std::string_view& varname, ast::node rhs) {
+    return ast::call(symbol("="), {}, ast::list({make_variable(varname), std::move(rhs)}));
+}
+
+template <typename... Args>
+inline ast::node make_call(const std::string_view& modname, const std::string_view& funcname, Args&&... args) {
+    auto dot
+        = ast::call(symbol("."), {}, ast::list({node(symbol(modname)), node(symbol(funcname))}));
+    return ast::call(dot, {}, ast::list({node(std::forward<Args>(args))...}));
+}
 
 }  // namespace let::ast
 

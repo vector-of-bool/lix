@@ -3,41 +3,25 @@
 
 #include <vector>
 
-#include "boxed.hpp"
+#include "value_fwd.hpp"
 
 namespace let {
 
 class list {
-    std::vector<let::boxed> _elements;
+    std::vector<let::value> _elements;
 
 public:
-    explicit list(std::vector<let::boxed> els)
-        : _elements(std::move(els)) {
-    }
+    explicit list(std::vector<let::value> els);
+    std::size_t size() const noexcept;
+    void push(let::value b);
+    void pop();
+    void push_front(let::value b);
+    void pop_front();
 
-    auto size() const noexcept {
-        return _elements.size();
-    }
-
-    void push(let::boxed b) {
-        _elements.push_back(std::move(b));
-    }
-
-    void pop() {
-        _elements.pop_back();
-    }
-
-    void push_front(let::boxed b) {
-        _elements.insert(_elements.begin(), b);
-    }
-
-    void pop_front() {
-        _elements.erase(_elements.begin());
-    }
+    auto begin() const { return _elements.begin(); }
+    auto end() const { return _elements.end(); }
 };
 
 }  // namespace let
-
-LET_TYPEINFO(let::list, push, pop, push_front, pop_front, size);
 
 #endif  // LET_LIST_HPP_INCLUDED

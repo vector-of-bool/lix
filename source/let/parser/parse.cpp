@@ -13,7 +13,8 @@ using namespace let::ast;
 #include <tao/pegtl/contrib/tracer.hpp>
 
 #ifndef NDEBUG
-#define DEBUG_PARSER 1
+// #define DEBUG_PARSER 1
+#define DEBUG_PARSER 0
 #else
 #define DEBUG_PARSER 0
 #endif
@@ -193,7 +194,7 @@ public:
      * parsing function call arguments and we are appending expressions to be
      * passed as arguments to a function
      */
-    ast::list& arglist() {
+    const ast::list& arglist() {
         assert(!_nodes.empty());
         auto ret = _nodes.top().as_list();
         assert(!!ret && "Expected to find a list node for arguments");
@@ -208,7 +209,11 @@ public:
         _indent();
         std::cerr << "Push argument: " << n << '\n';
 #endif
-        arglist().nodes.push_back(std::move(n));
+        auto args      = pop();
+        auto node_list = std::move(std::move(args).as_list()->nodes);
+        node_list.push_back(std::move(n));
+        push(ast::node(ast::list(std::move(node_list))));
+        // arglist().nodes.push_back(std::move(n));
 #if DEBUG_PARSER
         _indent();
         std::cerr << "Arguments acc: " << _nodes.top() << '\n';
@@ -229,7 +234,7 @@ public:
                 std::cerr << "  [" << i << "] " << _nodes.top() << '\n';
                 _nodes.pop();
             }
-            assert(false && "Finished with more than one node in the parser stake");
+            assert(false && "Finished with more than one node in the parser stack");
             std::terminate();
         }
         return std::move(_nodes.top());
@@ -378,8 +383,11 @@ DEFINE_KEYWORD(else);
 DEFINE_KEYWORD(rescue);
 DEFINE_KEYWORD(catch);
 DEFINE_KEYWORD(end);
+DEFINE_KEYWORD(fn);
 
-using keyword = sor<kw_do, kw_else, kw_rescue, kw_catch, kw_end>;
+SET_ERROR_MESSAGE(kw_end, "Expected keyword `end`");
+
+using keyword = sor<kw_do, kw_else, kw_rescue, kw_catch, kw_end, kw_fn>;
 
 /**
  * Reserved words work a little differently from keywords, but we have those too
@@ -528,7 +536,7 @@ struct lit_tuple : if_must<seq<one<'{'>, meta_prep_arglist>, lit_tuple_tail> {};
 ACTION(lit_tuple) {
     auto nodes = st.pop();
     assert(nodes.as_list());
-    ast::list& node_list = *nodes.as_list();
+    auto& node_list = *nodes.as_list();
     if (node_list.nodes.size() != 3) {
         st.push(tuple(std::move(node_list.nodes)));
     } else {
@@ -555,16 +563,27 @@ struct lit_list : if_must<seq<one<'['>, meta_prep_arglist>, lit_list_tail> {};
 SET_ERROR_MESSAGE(lit_list_tail, "Expected list element, keyword pair, or closing ']'");
 
 struct lit_string : failure {};
+struct lit_bool : sor<KW("true"), KW("false")> {};
+
+struct ex_var : seq<identifier, not_at<hspace, sor<one<'('>, single_ex>>> {};
+MARK_LOGGED(ex_var);
+MARK_RESTORING(ex_var);
+ACTION(ex_var) {
+    auto var = st.pop();
+    st.push(call(std::move(var), {}, let::symbol("Var")));
+}
 
 // Forward-decl for block expressions
 struct block_expr;
+struct l2r_seq_expr;
+struct l2r_seq_expr_exact;
 
 /**
  * Helper for parsing keyword blocks. Applies the action before getting to
  * the tail.
  */
 template <typename Keyword>
-struct keyword_block_head : seq<Keyword, ws, must<block_expr>> {};
+struct keyword_block_head : seq<Keyword, ws, must<l2r_seq_expr>> {};
 
 /**
  * A keyword block is block prefixed by a keyword (do, else, finally, etc.)
@@ -591,6 +610,8 @@ SET_ERROR_MESSAGE(keyword_block_tail, "Expected continuation block or 'end' foll
  */
 struct do_block : keyword_block<kw_do> {};
 
+struct ex_closure_callable : seq<ex_var, one<'.'>, at<one<'('>>> {};
+MARK_RESTORING(ex_closure_callable);
 struct ex_local_callable : seq<identifier> {};
 struct ex_remote_callable : seq<lit_tall_sym, hspace, one<'.'>, ws, identifier> {};
 
@@ -731,6 +752,12 @@ MARK_LOGGED(paren_args);
  */
 struct ex_base_call :
     sor<
+        // We can be a call to a closure
+        seq<
+            ex_closure_callable,
+            meta_prep_arglist,
+            paren_args
+        >,
         // We can be a local function call (No module qualifier)
         seq<
             ex_local_callable,
@@ -769,25 +796,33 @@ ACTION(ex_base_call) {
     st.push(call(std::move(fn), {}, std::move(args)));
 }
 
-struct ex_var : seq<identifier, not_at<hspace, sor<one<'('>, single_ex>>> {};
-MARK_LOGGED(ex_var);
-MARK_RESTORING(ex_var);
-ACTION(ex_var) {
-    auto var = st.pop();
-    st.push(call(std::move(var), {}, let::symbol("Var")));
+struct anon_fn_tail : seq<l2r_seq_expr_exact, ws, must<kw_end>> {};
+SET_ERROR_MESSAGE(anon_fn_tail, "Expected anonymous function clauses");
+struct anon_fn : seq<kw_fn, ws, must<anon_fn_tail>> {};
+MARK_LOGGED(anon_fn);
+ACTION(anon_fn) {
+    auto clauses = st.pop();
+    st.push(call(symbol("fn"), {}, std::move(clauses)));
 }
 
 /**
  * A parenthesis-wrapped expression. Anything can be inside!
  */
-struct ex_parenthesis : seq<one<'('>, ws, must<struct block_expr>, ws, must<one<')'>>> {};
+struct ex_parenthesis : seq<one<'('>, ws, must<l2r_seq_expr>, ws, must<one<')'>>> {};
 SET_ERROR_MESSAGE(one<')'>, "Expected closing parenthesis");
 
 /**
  * The basis expressions. No higher precedence than this!
  */
-struct ex_atomic
-    : sor<ex_parenthesis, ex_var, lit_list, lit_tuple, lit_string, lit_number, lit_symbol> {};
+struct ex_atomic : sor<ex_parenthesis,
+                       lit_bool,
+                       anon_fn,
+                       ex_var,
+                       lit_list,
+                       lit_tuple,
+                       lit_string,
+                       lit_number,
+                       lit_symbol> {};
 
 template <typename Rule>
 struct op_pad : seq<hspace, Rule, ws> {};
@@ -938,7 +973,7 @@ struct ex_unary : sor<ex_unary_, ex_base> {};
  */
 struct ex_product : ex_binary_operator<one<'*', '/'>, ex_unary, left> {};
 struct ex_sum
-    : ex_binary_operator<sor<seq<one<'-'>, not_at<one<'-'>>>, seq<one<'+'>, not_at<one<'+'>>>>,
+    : ex_binary_operator<sor<seq<one<'-'>, not_at<one<'-', '>'>>>, seq<one<'+'>, not_at<one<'+'>>>>,
                          ex_product,
                          left> {};
 struct ex_concat
@@ -954,18 +989,34 @@ struct ex_left_arrow : ex_binary_operator<STR("<-"), ex_typespec, right> {};
  */
 struct single_ex : seq<ex_left_arrow> {};
 MARK_LOGGED(single_ex);
+MARK_RESTORING(single_ex);
+
+struct l2r_seq_element_head;
+
+/**
+ * XXX: Because the -> operator has lower precedence than block joiners ";" or newline,
+ * we need to do a lookahead in the block parsing to check that we aren't about to parse
+ * an arrow-expression, which indicates that we are starting another -> clause.
+ *
+ * THIS IS TERRIBLY INEFFICIENT. It requires a huge amount of lookahead. We do a
+ * negative lookahead for an `l2r_seq_element_head`, which can parse an arbirary
+ * number of single expressions. We throw that whole parse away and restart in
+ * the l2r_seq_element rule, just to parse it again.
+ *
+ * We can do it better.
+ */
 
 /**
  * A block expression is a list of expressions separated by newlines or semicolons
  */
-struct block_expr_tail : seq<hspace, expr_joiner, ws, single_ex> {};
+struct block_expr_tail : seq<hspace, expr_joiner, ws, not_at<l2r_seq_element_head>, single_ex> {};
 MARK_LOGGED(block_expr_tail);
 ACTION(block_expr_tail) {
     auto expr = st.pop();
     st.push_to_list(std::move(expr));
 }
 
-struct block_expr_tail_first : seq<expr_joiner, ws, single_ex> {};
+struct block_expr_tail_first : seq<expr_joiner, ws, not_at<l2r_seq_element_head>, single_ex> {};
 MARK_LOGGED(block_expr_tail_first);
 ACTION(block_expr_tail_first) {
     // We're the second expression in a block. We'll conver the prior expression
@@ -994,6 +1045,39 @@ struct block_expr
     : seq<single_ex, hspace, opt<block_expr_tail_first, star<block_expr_tail>, block_expr_commit>> {
 };
 MARK_LOGGED(block_expr);
+
+/**
+ * An left-to-right arrow sequence is something quite special
+ */
+struct l2r_lhs_expr_one : seq<single_ex> {};
+ACTION(l2r_lhs_expr_one) {
+    // Push the lhs element to the lhs argument list
+    auto expr = st.pop();
+    st.push_to_list(std::move(expr));
+}
+SET_ERROR_MESSAGE(l2r_lhs_expr_one, "Expected single expression following comma");
+struct l2r_seq_element_head
+    : seq<opt<list_must<l2r_lhs_expr_one, one<','>, blank>>, ws, STR("->")> {};
+struct l2r_seq_element : seq<meta_prep_arglist, l2r_seq_element_head, ws, must<block_expr>> {};
+MARK_RESTORING(l2r_seq_element);
+MARK_LOGGED(l2r_seq_element);
+MARK_LOGGED(l2r_seq_element_head);
+ACTION(l2r_seq_element) {
+    auto block = st.pop();
+    auto lhs   = st.pop();
+    auto args  = ast::list();
+    args.nodes.push_back(std::move(lhs));
+    args.nodes.push_back(std::move(block));
+    auto tup = call(symbol("->"), {}, std::move(args));
+    st.push_to_list(std::move(tup));
+}
+// MARK_RESTORING(l2r_seq_expr_);
+
+struct l2r_seq_expr_exact : seq<meta_prep_arglist, plus<l2r_seq_element, ws>> {};
+MARK_RESTORING(l2r_seq_expr_exact);
+MARK_LOGGED(l2r_seq_expr_exact);
+struct l2r_seq_expr : sor<l2r_seq_expr_exact, block_expr> {};
+SET_ERROR_MESSAGE(l2r_seq_expr, "Expected expression or sequence thereof");
 
 /**
  * These are the rules that will save/restore our node stack state in case
@@ -1025,6 +1109,7 @@ MARK_LOGGED(rhs);
 ACTION(identifier) { st.push(symbol(in.string())); }
 ACTION(lit_tall_sym) { st.push(symbol(in.string())); }
 ACTION(lit_small_sym) { st.push(symbol(in.string().substr(1))); }
+ACTION(lit_bool) { st.push(symbol(in.string())); }
 // TODO: Remove digit separators from strings:
 ACTION(lit_int) {
     try {
@@ -1053,6 +1138,12 @@ struct inout_action<do_block> {
     static void enter(parser_state& st) { st.push_unmatched_state(); }
     static void exit(parser_state& st) { st.pop_unmatched_state(); }
 };
+ACTION(ex_closure_callable) {
+    auto      var = st.pop();
+    ast::list args;
+    args.nodes.push_back(std::move(var));
+    st.push(call(symbol("."), {}, std::move(args)));
+}
 ACTION(ex_remote_callable) {
     // Put in an operator .
     auto      fn     = st.pop();
@@ -1117,14 +1208,10 @@ struct let_pegtl_controller : pegtl::normal<Rule> {
         log_start(is_logging<Rule>(), st);
 #endif
         inout_action<Rule>::enter(st);
-        do_push_restore(is_restoring<Rule>(), st);
+        if constexpr (is_restoring<Rule>()) {
+            st.push_restore();
+        }
     }
-
-    static void do_push_restore(std::false_type, parser_state&) {}
-    static void do_push_restore(std::true_type, parser_state& st) { st.push_restore(); }
-
-    static void do_commit_restore(std::false_type, parser_state&) {}
-    static void do_commit_restore(std::true_type, parser_state& st) { st.commit_restore(); }
 
     static void do_restore(std::false_type, parser_state&) {}
     static void do_restore(std::true_type, parser_state& st) { st.restore(); }
@@ -1134,7 +1221,9 @@ struct let_pegtl_controller : pegtl::normal<Rule> {
 #if DEBUG_PARSER
         log_success(is_logging<Rule>(), st);
 #endif
-        do_commit_restore(is_restoring<Rule>(), st);
+        if constexpr (is_restoring<Rule>()) {
+            st.commit_restore();
+        }
         inout_action<Rule>::exit(st);
     }
 
@@ -1143,7 +1232,9 @@ struct let_pegtl_controller : pegtl::normal<Rule> {
 #if DEBUG_PARSER
         log_fail(is_logging<Rule>(), st);
 #endif
-        do_restore(is_restoring<Rule>(), st);
+        if constexpr (is_restoring<Rule>()) {
+            st.restore();
+        }
         inout_action<Rule>::exit(st);
     }
 

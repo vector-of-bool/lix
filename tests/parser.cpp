@@ -42,7 +42,7 @@ TEST_CASE("Parse a simple literal", "[parser]") {
         {":foo", ":foo"},
         {":foo.bar", "{:., [], [:foo, :bar]}"},
         {"if foo() do 12 end", "{:if, [], [{:foo, [], []}, [{:do, 12}]]}"},
-        {"if foo do 12 end",   "{:if, [], [{:foo, [], :Var}, [{:do, 12}]]}"},
+        {"if foo do 12 end", "{:if, [], [{:foo, [], :Var}, [{:do, 12}]]}"},
         {"foo = 12", "{:=, [], [{:foo, [], :Var}, 12]}"},
         {"foo do 12 end", "{:foo, [], [[{:do, 12}]]}"},
         {"deftype MyType do\n"
@@ -50,21 +50,50 @@ TEST_CASE("Parse a simple literal", "[parser]") {
          "  other :: String\n"
          "end",
          // Now we're getting a bit messy:
-         "{:deftype, [], [:MyType, [{:do, {:__block__, [], [{:::, [], [{:value, [], :Var}, {:int, [], :Var}]}, {:::, [], [{:other, [], :Var}, :String]}]}}]]}"},
-         {"foo bar: baz", "{:foo, [], [[{:bar, {:baz, [], :Var}}]]}"},
-         {"foo 12, bar: baz", "{:foo, [], [12, [{:bar, {:baz, [], :Var}}]]}"},
-         {"if foo, do: 12, else: 33", "{:if, [], [{:foo, [], :Var}, [{:do, 12}, {:else, 33}]]}"},
-         {"if foo,\n  do: 12,\n  else: 33\n", "{:if, [], [{:foo, [], :Var}, [{:do, 12}, {:else, 33}]]}"},
-         {"{12, 22}", "{12, 22}"},
-         {"{12, 22, 45}", "{:{}, [], [12, 22, 45]}"},
-         {"{foo: 42}", "{[{:foo, 42}]}"},
-         {"{:cat, foo: 42}", "{:cat, [{:foo, 42}]}"},
-         {"[1, 2, 3]", "[1, 2, 3]"},
+         "{:deftype, [], [:MyType, [{:do, {:__block__, [], [{:::, [], [{:value, [], :Var}, {:int, "
+         "[], :Var}]}, {:::, [], [{:other, [], :Var}, :String]}]}}]]}"},
+        {"foo bar: baz", "{:foo, [], [[{:bar, {:baz, [], :Var}}]]}"},
+        {"foo 12, bar: baz", "{:foo, [], [12, [{:bar, {:baz, [], :Var}}]]}"},
+        {"if foo, do: 12, else: 33", "{:if, [], [{:foo, [], :Var}, [{:do, 12}, {:else, 33}]]}"},
+        {"if foo,\n  do: 12,\n  else: 33\n",
+         "{:if, [], [{:foo, [], :Var}, [{:do, 12}, {:else, 33}]]}"},
+        {"{12, 22}", "{12, 22}"},
+        {"{12, 22, 45}", "{:{}, [], [12, 22, 45]}"},
+        {"{foo: 42}", "{[{:foo, 42}]}"},
+        {"{:cat, foo: 42}", "{:cat, [{:foo, 42}]}"},
+        {"[1, 2, 3]", "[1, 2, 3]"},
+        {"foo do 12, 13, 14 -> bar end",
+         "{:foo, [], [[{:do, [{:->, [], [[12, 13, 14], {:bar, [], :Var}]}]}]]}"},
+        {R"(
+            foo do
+                :sym -> 22
+            end
+        )",
+         "{:foo, [], [[{:do, [{:->, [], [[:sym], 22]}]}]]}"},
+        {R"(
+            foo do
+                12 -> 22
+                22 -> 42; 52
+            end
+        )",
+         "{:foo, [], [[{:do, [{:->, [], [[12], 22]}, {:->, [], [[22], {:__block__, [], [42, "
+         "52]}]}]}]]}"},
+        {"true", ":true"},
+        {"false", ":false"},
+        {"fn -> 12 end", "{:fn, [], [{:->, [], [[], 12]}]}"},
+        {"fn :food -> 12 end", "{:fn, [], [{:->, [], [[:food], 12]}]}"},
+        {"foo.()", "{{:., [], [{:foo, [], :Var}]}, [], []}"},
+        {"foo.(12)", "{{:., [], [{:foo, [], :Var}]}, [], [12]}"},
     };
     for (auto[code, canon] : pairs) {
         INFO(code);
-        auto node = let::ast::parse(code);
-        CHECK(to_string(node) == canon);
+        try {
+            auto node = let::ast::parse(code);
+            CHECK(to_string(node) == canon);
+        } catch (const let::ast::parse_error& e) {
+            INFO(e.what());
+            REQUIRE(false);
+        }
     }
     // CHECK_THROWS(let::ast::parse("foo("));
     // let::ast::parse("foo + bar");

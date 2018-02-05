@@ -11,9 +11,14 @@ if(NOT TARGET catch::main)
     add_library(catch::main ALIAS catch_main)
 endif()
 
-foreach(name IN ITEMS parser rt)
+foreach(name IN ITEMS
+        parser
+        rt
+        compiler
+        program
+        )
     set(tname cpp.test.${name})
     add_executable(${tname} ${name}.cpp)
-    target_link_libraries(${tname} PRIVATE catch::main let::${name})
+    target_link_libraries(${tname} PRIVATE catch::main let::let)
     add_test(${tname} ${tname})
 endforeach()
