@@ -1005,7 +1005,8 @@ struct ex_concat
 struct ex_compare_op : sor<STR("=="), STR("!="), STR("=~")> {};
 struct ex_compare : ex_binary_operator<ex_compare_op, ex_concat, left> {};
 struct ex_assign : ex_binary_operator<STR("="), ex_compare, right> {};
-struct ex_typespec : ex_binary_operator<STR("::"), ex_assign, right> {};
+struct ex_binor : ex_binary_operator<STR("|"), ex_assign, right> {};
+struct ex_typespec : ex_binary_operator<STR("::"), ex_binor, right> {};
 struct ex_left_arrow : ex_binary_operator<STR("<-"), ex_typespec, right> {};
 
 /**

@@ -37,6 +37,10 @@ struct code_ostream_visitor {
     void operator()(is::call c) { o << std::setw(13) << "call  " << c.fn << ", " << c.arg; }
     void operator()(is::add a) { o << std::setw(13) << "add  " << a.a << ", " << a.b; }
     void operator()(is::sub s) { o << std::setw(13) << "sub  " << s.a << ", " << s.b; }
+    void operator()(is::mk_cons c) { o << std::setw(13) << "mk_cons  " << c.lhs << ", " << c.rhs; }
+    void operator()(is::push_front c) {
+        o << std::setw(13) << "push_front  " << c.elem << ", " << c.list;
+    }
     void operator()(is::eq e) { o << std::setw(13) << "eq  " << e.a << ", " << e.b; }
     void operator()(is::const_int i) { o << std::setw(13) << "const_int  " << i.value; }
     void operator()(const is::const_symbol& sym) {
@@ -108,7 +112,7 @@ struct code_ostream_visitor {
 
 std::ostream& let::code::operator<<(std::ostream& o, const code& c) {
     code_ostream_visitor visitor{o};
-    int                   counter = 0;
+    int                  counter = 0;
     o << std::setfill(' ');
     for (auto& inst : c) {
         o << "%" << std::left << std::setw(3) << counter++ << std::right << " ";

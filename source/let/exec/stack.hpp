@@ -29,11 +29,16 @@ struct ex_tuple {
 struct ex_list {
     std::vector<stack_element> elements;
 };
+struct ex_cons {
+    std::reference_wrapper<const stack_element> head;
+    std::reference_wrapper<const stack_element> tail;
+};
 
 let::tuple convert_ex(const ex_tuple&);
 let::list  convert_ex(const ex_list&);
 
-using stack_element_var = std::variant<let::value, closure, ex_tuple, ex_list, binding_slot>;
+using stack_element_var
+    = std::variant<let::value, closure, ex_tuple, ex_list, ex_cons, binding_slot>;
 
 class stack_element {
     stack_element_var _value;
@@ -61,6 +66,7 @@ public:
     DEF_OBS(binding_slot);
     DEF_OBS(ex_tuple);
     DEF_OBS(ex_list);
+    DEF_OBS(ex_cons);
 #undef DEF_OBS
 
 #define DEF_INDIR_OBS(name)                                                                        \

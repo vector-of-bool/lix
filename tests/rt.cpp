@@ -325,10 +325,35 @@ TEST_CASE("defmodule") {
     REQUIRE(value.as_symbol());
     CHECK(value.as_symbol()->string() == "no_args");
 
-    auto true_sym = let::symbol("true");
+    auto true_sym  = let::symbol("true");
     auto false_sym = let::symbol("false");
     CHECK(let::eval("MyModule.is_cat_sound('meow')", ctx) == true_sym);
     CHECK(let::eval("MyModule.is_cat_sound('hiss')", ctx) == true_sym);
     CHECK(let::eval("MyModule.is_cat_sound('barf')", ctx) == true_sym);
     CHECK(let::eval("MyModule.is_cat_sound('woof')", ctx) == false_sym);
+}
+
+TEST_CASE("Cons 1") {
+    auto code = R"(
+        list = [:cat, :dog, :bird, :person]
+        [hd|tail] = list
+        hd
+    )";
+    auto ast  = let::ast::parse(code);
+    CHECK_NOTHROW(let::compile(ast));
+    auto block = let::compile(ast);
+    INFO(block);
+    REQUIRE(let::eval(ast) == let::symbol("cat"));
+}
+
+TEST_CASE("Cons 2") {
+    auto code = R"(
+        list = [:dog, :bird, :person]
+        new_list = [:cat | list]
+    )";
+    auto ast  = let::ast::parse(code);
+    CHECK_NOTHROW(let::compile(ast));
+    auto block = let::compile(ast);
+    INFO(block);
+    CHECK_NOTHROW(let::eval(ast));
 }

@@ -44,7 +44,8 @@ struct const_symbol {
 };
 struct const_str {
     std::string string;
-    explicit const_str(std::string s) : string(std::move(s)) {}
+    explicit const_str(std::string s)
+        : string(std::move(s)) {}
 };
 struct hard_match {
     slot_ref_t lhs;
@@ -86,6 +87,14 @@ struct mk_list {
 struct mk_closure {
     inst_offset_t code_begin;
     inst_offset_t code_end;
+};
+struct mk_cons {
+    slot_ref_t lhs;
+    slot_ref_t rhs;
+};
+struct push_front {
+    slot_ref_t elem;
+    slot_ref_t list;
 };
 struct jump {
     inst_offset_t target;
@@ -137,7 +146,9 @@ using any_var = std::variant<ret,
                              rewind,
                              no_clause,
                              dot,
-                             mk_closure>;
+                             mk_closure,
+                             mk_cons,
+                             push_front>;
 
 }  // namespace is_types
 

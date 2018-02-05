@@ -10,15 +10,15 @@ namespace is = let::code::is_types;
 struct instr_visitor {
     context& ctx;
 
-    void operator()(is::const_int i) { ctx.push(i.value); }
-    void operator()(is::const_double d) { ctx.push(d.value); }
-    void operator()(const is::const_symbol& sym) { ctx.push(let::symbol{sym.string}); }
-    void operator()(const is::const_str& str) { ctx.push(let::string{str.string}); }
-    void operator()(is::const_binding_slot s) { ctx.push(binding_slot{s.slot}); }
+    void execute(is::const_int i) { ctx.push(i.value); }
+    void execute(is::const_double d) { ctx.push(d.value); }
+    void execute(const is::const_symbol& sym) { ctx.push(let::symbol{sym.string}); }
+    void execute(const is::const_str& str) { ctx.push(let::string{str.string}); }
+    void execute(is::const_binding_slot s) { ctx.push(binding_slot{s.slot}); }
 
-    void operator()(is::ret r) { ctx.pop_frame_return(r.slot); }
+    void execute(is::ret r) { ctx.pop_frame_return(r.slot); }
 
-    void operator()(is::call c) {
+    void execute(is::call c) {
         auto& callee = ctx.nth(c.fn);
         if (auto closure = callee.as_closure()) {
             auto arg = ctx.nth(c.arg);
@@ -41,39 +41,39 @@ struct instr_visitor {
         }
     }
 
-    void operator()(is::jump j) { ctx.jump(j.target); }
+    void execute(is::jump j) { ctx.jump(j.target); }
 
-    void operator()(is::test_true t) {
+    void execute(is::test_true t) {
         auto value = ctx.nth(t.slot).as_symbol();
         ctx.set_test_state(value && value->string() == "true");
     }
 
-    void operator()(is::false_jump j) {
+    void execute(is::false_jump j) {
         if (ctx.get_test_state() == false) {
             ctx.jump(j.target);
         }
     }
 
-    void operator()(is::rewind r) { ctx.rewind(r.slot); }
+    void execute(is::rewind r) { ctx.rewind(r.slot); }
 
-    void operator()(is::add add) {
+    void execute(is::add add) {
         auto lhs = ctx.nth(add.a).as_integer();
         auto rhs = ctx.nth(add.b).as_integer();
         // TODO: Check for nullptr
         ctx.push(*lhs + *rhs);
     }
-    void operator()(is::sub sub) {
+    void execute(is::sub sub) {
         auto lhs = ctx.nth(sub.a).as_integer();
         auto rhs = ctx.nth(sub.b).as_integer();
         // TODO: Check for nullptr;
         ctx.push(*lhs - *rhs);
     }
 
-    void operator()(is::eq eq) {
+    void execute(is::eq eq) {
         // Compare operands for equality/equivalence
         auto& lhs       = ctx.nth(eq.a);
         auto& rhs       = ctx.nth(eq.b);
-        auto are_equal = _compare_eq(lhs, rhs);
+        auto  are_equal = _compare_eq(lhs, rhs);
         ctx.push(are_equal ? let::symbol{"true"} : let::symbol{"false"});
     }
 
@@ -111,6 +111,21 @@ struct instr_visitor {
         return true;
     }
 
+    bool _do_match(const ex_cons& lhs, const ex_list& list) {
+        auto& head = lhs.head;
+        auto& tail = lhs.tail;
+        if (list.elements.size() < 2) {
+            return false;
+        }
+        auto head_matched = _do_match(head, list.elements[0]);
+        if (!head_matched) {
+            return false;
+        }
+        std::vector<stack_element> tail_els{list.elements.begin() + 1, list.elements.end()};
+        ex_list                    tail_list{std::move(tail_els)};
+        return _do_match(tail, tail_list);
+    }
+
     bool _do_match(const stack_element& lhs, const stack_element& rhs) {
         if (auto bind_slot = lhs.as_binding_slot()) {
             // We're a binding. Fill in the variable slot.
@@ -123,6 +138,13 @@ struct instr_visitor {
                 return false;
             }
             return _do_match(*lhs_tup, *rhs_tup);
+        } else if (auto lhs_cons = lhs.as_ex_cons()) {
+            // A cons!
+            auto rhs_list = rhs.as_ex_list();
+            if (!rhs_list) {
+                return false;
+            }
+            return _do_match(*lhs_cons, *rhs_list);
         } else {
             // Other than direct assignment and tuple expansion, we just do
             // an equality check
@@ -130,7 +152,7 @@ struct instr_visitor {
         }
     }
 
-    void operator()(is::hard_match mat) {
+    void execute(is::hard_match mat) {
         auto& lhs       = ctx.nth(mat.lhs);
         auto& rhs       = ctx.nth(mat.rhs);
         auto  did_match = _do_match(lhs, rhs);
@@ -139,29 +161,29 @@ struct instr_visitor {
             assert(false && "Match failure");
         }
     }
-    void operator()(is::try_match mat) {
+    void execute(is::try_match mat) {
         auto& lhs       = ctx.nth(mat.lhs);
         auto& rhs       = ctx.nth(mat.rhs);
         auto  did_match = _do_match(lhs, rhs);
         ctx.set_test_state(did_match);
     }
-    void operator()(is::mk_tuple_0) { ctx.push(ex_tuple{{}}); }
-    void operator()(is::mk_tuple_1 t) { ctx.push(ex_tuple{{ctx.nth(t.a)}}); }
-    void operator()(is::mk_tuple_2 t) { ctx.push(ex_tuple{{ctx.nth(t.a), ctx.nth(t.b)}}); }
-    void operator()(is::mk_tuple_3 t) {
+    void execute(is::mk_tuple_0) { ctx.push(ex_tuple{{}}); }
+    void execute(is::mk_tuple_1 t) { ctx.push(ex_tuple{{ctx.nth(t.a)}}); }
+    void execute(is::mk_tuple_2 t) { ctx.push(ex_tuple{{ctx.nth(t.a), ctx.nth(t.b)}}); }
+    void execute(is::mk_tuple_3 t) {
         ctx.push(ex_tuple{{ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c)}});
     }
-    void operator()(is::mk_tuple_4 t) {
+    void execute(is::mk_tuple_4 t) {
         ctx.push(ex_tuple{{ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c), ctx.nth(t.d)}});
     }
-    void operator()(is::mk_tuple_5 t) {
+    void execute(is::mk_tuple_5 t) {
         ctx.push(ex_tuple{{ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c), ctx.nth(t.d), ctx.nth(t.e)}});
     }
-    void operator()(is::mk_tuple_6 t) {
+    void execute(is::mk_tuple_6 t) {
         ctx.push(ex_tuple{
             {ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c), ctx.nth(t.d), ctx.nth(t.e), ctx.nth(t.f)}});
     }
-    void operator()(is::mk_tuple_7 t) {
+    void execute(is::mk_tuple_7 t) {
         ctx.push(ex_tuple{{ctx.nth(t.a),
                            ctx.nth(t.b),
                            ctx.nth(t.c),
@@ -170,26 +192,31 @@ struct instr_visitor {
                            ctx.nth(t.f),
                            ctx.nth(t.g)}});
     }
-    void operator()(const is::mk_tuple_n& t) {
+    void execute(const is::mk_tuple_n& t) {
         ex_tuple new_tup;
         for (auto slot : t.slots) {
             new_tup.elements.push_back(ctx.nth(slot));
         }
         ctx.push(std::move(new_tup));
     }
-    void operator()(const is::mk_list& l) {
+    void execute(const is::mk_list& l) {
         ex_list new_list;
         for (auto slot : l.slots) {
             new_list.elements.push_back(ctx.nth(slot));
         }
         ctx.push(std::move(new_list));
     }
-    void operator()(const is::mk_closure& clos) {
+    void execute(const is::mk_closure& clos) {
         auto cl = closure(ctx.current_code(), ctx.current_code().begin() + clos.code_begin.index);
         ctx.push(std::move(cl));
     }
-    void operator()(is::no_clause) { throw std::runtime_error{"No matching clause"}; }
-    void operator()(is::dot d) {
+    void execute(const is::mk_cons& c) {
+        auto& lhs = ctx.nth(c.lhs);
+        auto& rhs = ctx.nth(c.rhs);
+        ctx.push(ex_cons{lhs, rhs});
+    }
+    void execute(is::no_clause) { throw std::runtime_error{"No matching clause"}; }
+    void execute(is::dot d) {
         auto& lhs = ctx.nth(d.object);
         auto  rhs = ctx.nth(d.attr_name).as_symbol();
         assert(rhs && "Non-symbol attribute name");
@@ -204,6 +231,19 @@ struct instr_visitor {
             std::visit([&](auto&& fn) { ctx.push(fn); }, *maybe_fn);
         } else {
             assert(false && "Unhandled dot operator case");
+        }
+    }
+
+    void execute(is::push_front push) {
+        auto& elem = ctx.nth(push.elem);
+        auto& list = ctx.nth(push.list);
+        if (auto list_ptr = list.as_ex_list()) {
+            // TODO: Sort out the ex_list vs list and forward-linking persistence
+            auto copy = list_ptr->elements;
+            copy.insert(copy.begin(), elem);
+            ctx.push(ex_list{std::move(copy)});
+        } else {
+            throw std::runtime_error{"Attempt to push to non-list"};
         }
     }
 };
@@ -230,7 +270,7 @@ public:
 
     void _exec_one(context& ctx) {
         const auto& instr = _top_frame().get_and_advance();
-        instr.visit(instr_visitor{ctx});
+        instr.visit([&](const auto& i) { instr_visitor{ctx}.execute(i); });
     }
 
     std::optional<let::value> execute_n(std::size_t n, context& ctx) {

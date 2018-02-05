@@ -5,6 +5,8 @@
 #include <let/code/builder.hpp>
 #include <let/code/code.hpp>
 
+#include <let/util/args.hpp>
+
 #include <cassert>
 #include <list>
 #include <map>
@@ -318,8 +320,8 @@ struct block_compiler {
                                        const std::vector<ast::node>& clauses) {
         const auto                 rewind_to = current_end_slot;
         std::vector<inst_offset_t> exit_inst_offsets;
-        std::vector<is::jump*>    exit_instrs;
-        is::false_jump*           prev_false_jump = nullptr;
+        std::vector<is::jump*>     exit_instrs;
+        is::false_jump*            prev_false_jump = nullptr;
         for (auto& n : clauses) {
             if (prev_false_jump) {
                 // Resolve the false-jump of the prior clause
@@ -429,6 +431,43 @@ struct block_compiler {
         return consume_slot();
     }
 
+    /**
+     * Compile a list cons, that is: [hd|tail]
+     */
+    slot_ref_t _compile_cons(const ast::node& args) {
+        if (binding_expr_depth != 0) {
+            return _compile_cons_pop(args);
+        } else {
+            return _compile_cons_push(args);
+        }
+    }
+
+    slot_ref_t _compile_cons_pop(const ast::node& args_) {
+        auto arglist = args_.as_list();
+        assert(arglist);
+        macro_argument_parser args{*arglist};
+        if (args.count() != 2) {
+            throw std::runtime_error{"Cons expects two arguments"};
+        }
+        auto lhs_slot = compile(args.nth(0));
+        auto rhs_slot = compile(args.nth(1));
+        builder.push_instr(is::mk_cons{lhs_slot, rhs_slot});
+        return consume_slot();
+    }
+
+    slot_ref_t _compile_cons_push(const ast::node& args_) {
+        auto arglist = args_.as_list();
+        assert(arglist);
+        macro_argument_parser args{*arglist};
+        if (args.count() != 2) {
+            throw std::runtime_error{"Cons expects two arguments"};
+        }
+        auto  lhs_slot = compile(args.nth(0));
+        auto  rhs_slot = compile(args.nth(1));
+        builder.push_instr(is::push_front{lhs_slot, rhs_slot});
+        return consume_slot();
+    }
+
     slot_ref_t _compile_quote(const ast::list& args) {
         assert(args.nodes.size() == 1 && "Invalid arguments to quote");
         auto kwargs = args.nodes[0].as_list();
@@ -453,6 +492,18 @@ struct block_compiler {
      */
 
     slot_ref_t operator()(const ast::list& l) {
+        // Yeah, the indentation is bad, but we have to do some careful checking
+        // for a cons
+        if (l.nodes.size() == 1) {
+            if (auto inner_call = l.nodes[0].as_call()) {
+                if (auto call_sym = inner_call->target().as_symbol();
+                    call_sym && call_sym->string() == "|") {
+                    // ITS A CONS
+                    return _compile_cons(inner_call->arguments());
+                }
+            }
+        }
+        // Not a const, just a list
         std::vector<slot_ref_t> slots;
         for (auto& n : l.nodes) {
             auto next_slot = compile(n);
@@ -567,7 +618,7 @@ struct block_compiler {
 
 code::code let::compile(const ast::node& node) {
     let::code::code_builder builder;
-    block_compiler         comp{builder};
+    block_compiler          comp{builder};
     comp.compile_root(node);
     return builder.save();
     // block_compiler comp;
