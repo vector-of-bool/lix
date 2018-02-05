@@ -1,10 +1,11 @@
 #ifndef LET_TUPLE_HPP_INCLUDED
 #define LET_TUPLE_HPP_INCLUDED
 
+#include "value_fwd.hpp"
+
+#include <ostream>
 #include <stdexcept>
 #include <vector>
-
-#include "value_fwd.hpp"
 
 namespace let {
 
@@ -28,9 +29,11 @@ public:
     template <typename... Ts>
     inline static tuple make(Ts&&... ts);
 
-    inline std::size_t size() const noexcept;
+    inline std::size_t       size() const noexcept;
     inline const let::value& operator[](std::size_t idx) const;
 };
+
+std::ostream& operator<<(std::ostream& o, const tuple& l);
 
 }  // namespace let
 

@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <type_traits>
 #include <utility>
 
@@ -170,15 +171,18 @@ template <typename T>
 T box_convert(const boxed& b) {
     auto opt = try_box_convert<T>(b);
     if (!opt) {
-        if
-            constexpr(let::refl::is_reflected<T>::value) {
-                throw bad_box_cast{b.type_info().name(), let::refl::ct_type_info<T>::name()};
-            }
-        else {
+        if constexpr (let::refl::is_reflected<T>::value) {
+            throw bad_box_cast{b.type_info().name(), let::refl::ct_type_info<T>::name()};
+        } else {
             throw bad_box_cast{b.type_info().name(), "<Unregistered type>"};
         }
     }
     return *opt;
+}
+
+inline std::ostream& operator<<(std::ostream& o, const boxed&) {
+    o << "<let::boxed>";
+    return o;
 }
 
 }  // namespace let
