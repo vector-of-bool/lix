@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <type_traits>
+#include <ostream>
 
 #include <let/util.hpp>
 #include <let/value.hpp>
@@ -63,6 +64,11 @@ template <typename Function,
 function::function(Function&& fn)
     : _func(std::make_shared<detail::erased_fn_impl<std::decay_t<Function>>>(
           std::forward<Function>(fn))) {}
+
+inline std::ostream& operator<<(std::ostream& o, const function&) {
+    o << "<let::exec::function>";
+    return o;
+}
 
 }  // namespace let::exec
 

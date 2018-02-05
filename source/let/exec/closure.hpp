@@ -4,6 +4,7 @@
 #include <let/code/code.hpp>
 #include <let/value_fwd.hpp>
 
+#include <ostream>
 #include <vector>
 
 namespace let::exec {
@@ -22,6 +23,11 @@ public:
     const code::code& code() const { return _code; }
     code::iterator    code_begin() const { return _first_instr; }
 };
+
+inline std::ostream& operator<<(std::ostream& o, const closure&) {
+    o << "<let::exec::closure>";
+    return o;
+}
 
 }  // namespace let::exec
 

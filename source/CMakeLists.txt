@@ -33,6 +33,8 @@ add_library(let STATIC
 
     let/list.hpp
     let/list.cpp
+    let/tuple.hpp
+    let/tuple.cpp
     let/exec/context.hpp
     let/exec/context.cpp
     let/exec/module.hpp
