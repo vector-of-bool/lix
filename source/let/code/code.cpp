@@ -42,6 +42,9 @@ struct code_ostream_visitor {
     void operator()(const is::const_symbol& sym) {
         o << std::setw(13) << "const_sym  " << '"' << sym.string << '"';
     }
+    void operator()(const is::const_str& str) {
+        o << std::setw(13) << "const_str  " << '"' << str.string << '"';
+    }
     void operator()(is::const_double d) { o << std::setw(13) << "const_double  " << d.value; }
     void operator()(is::hard_match m) {
         o << std::setw(13) << "hard_match  " << m.lhs << ", " << m.rhs;

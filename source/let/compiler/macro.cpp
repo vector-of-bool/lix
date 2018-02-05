@@ -34,6 +34,7 @@ struct macro_expander {
     node operator()(ast::integer i) { return node(i); }
     node operator()(ast::floating f) { return node(f); }
     node operator()(const ast::symbol& s) { return node(s); }
+    node operator()(const ast::string& s) { return node(s); }
 
     // The real meat of the operation.
     node operator()(const ast::call& call) {
@@ -43,7 +44,7 @@ struct macro_expander {
                 auto prev_imports = imported_modules;
                 auto block_args   = call.arguments().visit(*this);
                 auto ret
-                    = node(ast::call(call.target().clone(), call.meta(), std::move(block_args)));
+                    = node(ast::call(call.target(), call.meta(), std::move(block_args)));
                 imported_modules = prev_imports;
                 return std::move(ret);
             } else if (lhs_sym->string() == "import") {
@@ -108,6 +109,7 @@ struct ast_escaper {
     node operator()(ast::integer i) { return node(i); }
     node operator()(ast::floating f) { return node(f); }
     node operator()(const ast::symbol& s) { return node(s); }
+    node operator()(const ast::string& s) { return node(s); }
 
     node operator()(const ast::call& call) {
         auto target = call.target().visit(*this);

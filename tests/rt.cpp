@@ -278,8 +278,7 @@ TEST_CASE("Anonymous fn 2") {
     INFO(block);
     REQUIRE_NOTHROW(let::eval(ast));
     auto val = let::eval(ast);
-    REQUIRE(val.as_integer());
-    CHECK(*val.as_integer() == 2);
+    CHECK(val == 2);
 }
 
 TEST_CASE("Define function") {
@@ -296,7 +295,7 @@ TEST_CASE("Define function") {
     CHECK_NOTHROW(let::compile(ast));
     auto block = let::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
+    REQUIRE(let::eval(ast) == let::symbol("good"));
 }
 
 TEST_CASE("defmodule") {
@@ -307,6 +306,14 @@ TEST_CASE("defmodule") {
             end
 
             def my_function, do: :no_args
+            def is_cat_sound(sound) do
+                case sound do
+                    'meow' -> true
+                    'hiss' -> true
+                    'barf' -> true
+                    _ -> false
+                end
+            end
         end
     )";
     auto ctx  = let::exec::build_kernel_context();
@@ -317,4 +324,11 @@ TEST_CASE("defmodule") {
     value = let::eval("MyModule.my_function()", ctx);
     REQUIRE(value.as_symbol());
     CHECK(value.as_symbol()->string() == "no_args");
+
+    auto true_sym = let::symbol("true");
+    auto false_sym = let::symbol("false");
+    CHECK(let::eval("MyModule.is_cat_sound('meow')", ctx) == true_sym);
+    CHECK(let::eval("MyModule.is_cat_sound('hiss')", ctx) == true_sym);
+    CHECK(let::eval("MyModule.is_cat_sound('barf')", ctx) == true_sym);
+    CHECK(let::eval("MyModule.is_cat_sound('woof')", ctx) == false_sym);
 }

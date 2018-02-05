@@ -12,13 +12,12 @@
 #include <stack>
 
 using namespace let;
-// namespace is  = let::exec::instructions;
-namespace is2 = let::code::is_types;
+namespace is = let::code::is_types;
 
 namespace {
 
-using let::code::slot_ref_t;
 using let::code::inst_offset_t;
+using let::code::slot_ref_t;
 
 constexpr slot_ref_t    invalid_slot = {static_cast<std::size_t>(-1)};
 constexpr inst_offset_t invalid_inst = {static_cast<std::size_t>(-1)};
@@ -28,7 +27,7 @@ struct expand_quoted {};
 
 using varscope_stack = std::vector<varslot_map>;
 
-struct block_compiler2 {
+struct block_compiler {
     code::code_builder& builder;
     varscope_stack      variable_scopes;
 
@@ -63,7 +62,7 @@ struct block_compiler2 {
      */
     inst_offset_t current_instruction() const { return builder.current_offset(); }
 
-    explicit block_compiler2(code::code_builder& b)
+    explicit block_compiler(code::code_builder& b)
         : builder(b) {}
 
     /**
@@ -110,7 +109,7 @@ struct block_compiler2 {
 
     slot_ref_t compile_root(const ast::node& n) {
         auto ret_slot = _compile_new_scope(n);
-        builder.push_instr(is2::ret{ret_slot});
+        builder.push_instr(is::ret{ret_slot});
         return ret_slot;
     }
 
@@ -120,24 +119,24 @@ struct block_compiler2 {
     slot_ref_t _compile_tuple(const std::vector<ast::node>& nodes) {
         switch (nodes.size()) {
         case 0:
-            builder.push_instr(is2::mk_tuple_0{});
+            builder.push_instr(is::mk_tuple_0{});
             return consume_slot();
         case 1: {
             auto a = compile(nodes[0]);
-            builder.push_instr(is2::mk_tuple_1{a});
+            builder.push_instr(is::mk_tuple_1{a});
             return consume_slot();
         }
         case 2: {
             auto a = compile(nodes[0]);
             auto b = compile(nodes[1]);
-            builder.push_instr(is2::mk_tuple_2{a, b});
+            builder.push_instr(is::mk_tuple_2{a, b});
             return consume_slot();
         }
         case 3: {
             auto a = compile(nodes[0]);
             auto b = compile(nodes[1]);
             auto c = compile(nodes[2]);
-            builder.push_instr(is2::mk_tuple_3{a, b, c});
+            builder.push_instr(is::mk_tuple_3{a, b, c});
             return consume_slot();
         }
         case 4: {
@@ -145,7 +144,7 @@ struct block_compiler2 {
             auto b = compile(nodes[1]);
             auto c = compile(nodes[2]);
             auto d = compile(nodes[3]);
-            builder.push_instr(is2::mk_tuple_4{a, b, c, d});
+            builder.push_instr(is::mk_tuple_4{a, b, c, d});
             return consume_slot();
         }
         case 5: {
@@ -154,7 +153,7 @@ struct block_compiler2 {
             auto c = compile(nodes[2]);
             auto d = compile(nodes[3]);
             auto e = compile(nodes[4]);
-            builder.push_instr(is2::mk_tuple_5{a, b, c, d, e});
+            builder.push_instr(is::mk_tuple_5{a, b, c, d, e});
             return consume_slot();
         }
         case 6: {
@@ -164,7 +163,7 @@ struct block_compiler2 {
             auto d = compile(nodes[3]);
             auto e = compile(nodes[4]);
             auto f = compile(nodes[5]);
-            builder.push_instr(is2::mk_tuple_6{a, b, c, d, e, f});
+            builder.push_instr(is::mk_tuple_6{a, b, c, d, e, f});
             return consume_slot();
         }
         case 7: {
@@ -175,7 +174,7 @@ struct block_compiler2 {
             auto e = compile(nodes[4]);
             auto f = compile(nodes[5]);
             auto g = compile(nodes[6]);
-            builder.push_instr(is2::mk_tuple_7{a, b, c, d, e, f, g});
+            builder.push_instr(is::mk_tuple_7{a, b, c, d, e, f, g});
             return consume_slot();
         }
         default:
@@ -199,13 +198,13 @@ struct block_compiler2 {
                 _check_binary(args);
                 auto lhs_slot = compile(args.nodes[0]);
                 auto rhs_slot = compile(args.nodes[1]);
-                builder.push_instr(is2::add{lhs_slot, rhs_slot});
+                builder.push_instr(is::add{lhs_slot, rhs_slot});
                 return consume_slot();
             } else if (lhs_str == "-") {
                 _check_binary(args);
                 auto lhs_slot = compile(args.nodes[0]);
                 auto rhs_slot = compile(args.nodes[1]);
-                builder.push_instr(is2::sub{lhs_slot, rhs_slot});
+                builder.push_instr(is::sub{lhs_slot, rhs_slot});
                 return consume_slot();
             } else if (lhs_str == "=") {
                 _check_binary(args);
@@ -213,7 +212,7 @@ struct block_compiler2 {
                 auto lhs_slot = compile(args.nodes[0]);
                 binding_expr_depth--;
                 auto rhs_slot = compile(args.nodes[1]);
-                builder.push_instr(is2::hard_match{lhs_slot, rhs_slot});
+                builder.push_instr(is::hard_match{lhs_slot, rhs_slot});
                 return rhs_slot;
             } else if (lhs_str == "__block__") {
                 assert(args.nodes.size() != 0 && "Invalid block. Needs at least one expression");
@@ -229,7 +228,7 @@ struct block_compiler2 {
                 _check_binary(args);
                 auto lhs_slot = compile(args.nodes[0]);
                 auto rhs_slot = compile(args.nodes[1]);
-                builder.push_instr(is2::eq{lhs_slot, rhs_slot});
+                builder.push_instr(is::eq{lhs_slot, rhs_slot});
                 return consume_slot();
             } else if (lhs_str == "cond") {
                 return _compile_cond(args.nodes);
@@ -248,7 +247,7 @@ struct block_compiler2 {
                     _check_binary(args);
                     auto lhs_slot = compile(args.nodes[0]);
                     auto rhs_slot = compile(args.nodes[1]);
-                    builder.push_instr(is2::dot{lhs_slot, rhs_slot});
+                    builder.push_instr(is::dot{lhs_slot, rhs_slot});
                     return consume_slot();
                 }
             } else if (lhs_str == "fn") {
@@ -261,9 +260,9 @@ struct block_compiler2 {
         for (auto& arg : args.nodes) {
             arg_slots.push_back(compile(arg));
         }
-        builder.push_instr(is2::mk_tuple_n{std::move(arg_slots)});
+        builder.push_instr(is::mk_tuple_n{std::move(arg_slots)});
         auto arg_slot = consume_slot();
-        builder.push_instr(is2::call{fn_slot, arg_slot});
+        builder.push_instr(is::call{fn_slot, arg_slot});
         return consume_slot();
     }
 
@@ -309,7 +308,7 @@ struct block_compiler2 {
     slot_ref_t _compile_branches(const slot_ref_t match_slot, const ast::list& clause_list) {
         // Create a binding slot where the result of the cond will go
         auto res_slot = current_end_slot;
-        builder.push_instr(is2::const_binding_slot{res_slot});
+        builder.push_instr(is::const_binding_slot{res_slot});
         consume_slot();
         return _compile_branch_clauses(match_slot, res_slot, clause_list.nodes);
     }
@@ -319,18 +318,18 @@ struct block_compiler2 {
                                        const std::vector<ast::node>& clauses) {
         const auto                 rewind_to = current_end_slot;
         std::vector<inst_offset_t> exit_inst_offsets;
-        std::vector<is2::jump*>    exit_instrs;
-        is2::false_jump*           prev_false_jump = nullptr;
+        std::vector<is::jump*>    exit_instrs;
+        is::false_jump*           prev_false_jump = nullptr;
         for (auto& n : clauses) {
             if (prev_false_jump) {
                 // Resolve the false-jump of the prior clause
                 prev_false_jump->target = current_instruction();
                 // Rewind the stack for any work that the prior clause may have
                 // done in its test
-                builder.push_instr(is2::rewind{rewind_to});
+                builder.push_instr(is::rewind{rewind_to});
                 current_end_slot = rewind_to;
             }
-            auto[false_jump_target_, end_jump] = _compile_branch_clause(match_slot, res_slot, n);
+            auto [false_jump_target_, end_jump] = _compile_branch_clause(match_slot, res_slot, n);
             exit_instrs.push_back(end_jump);
             prev_false_jump = false_jump_target_;
         }
@@ -338,19 +337,19 @@ struct block_compiler2 {
         assert(prev_false_jump);
         // TODO: Add a cond-failure case
         prev_false_jump->target = current_instruction();
-        builder.push_instr(is2::no_clause{});
+        builder.push_instr(is::no_clause{});
         // Full fill the exit jumps:
         for (auto& jump : exit_instrs) {
             // Resolve the jumps at the end of each clause to jump to the end
             // of the cond block
             jump->target = current_instruction();
         }
-        builder.push_instr(is2::rewind{rewind_to});
+        builder.push_instr(is::rewind{rewind_to});
         current_end_slot = rewind_to;
         return res_slot;
     }
 
-    std::pair<is2::false_jump*, is2::jump*>
+    std::pair<is::false_jump*, is::jump*>
     _compile_branch_clause(slot_ref_t match_slot, slot_ref_t res_slot, const ast::node& n) {
         auto call = n.as_call();
         assert(call);
@@ -372,15 +371,15 @@ struct block_compiler2 {
         auto test_slot = compile(lhs);
         binding_expr_depth--;
         // Do a conditional jump
-        builder.push_instr(is2::try_match{test_slot, match_slot});
+        builder.push_instr(is::try_match{test_slot, match_slot});
         // Jump will be resolved later:
-        auto fail_jump = &builder.push_instr(is2::false_jump{invalid_inst});
+        auto fail_jump = &builder.push_instr(is::false_jump{invalid_inst});
         // Now compile our right-hand side
         auto rhs_slot = compile(rhs);
         // Add an instruction to put the result of our RHS into the result slot
-        builder.push_instr(is2::hard_match{res_slot, rhs_slot});
+        builder.push_instr(is::hard_match{res_slot, rhs_slot});
         // Jump to the rewind trampoline
-        auto exit_jump = &builder.push_instr(is2::jump{invalid_inst});
+        auto exit_jump = &builder.push_instr(is::jump{invalid_inst});
         variable_scopes.pop_back();
         return {fail_jump, exit_jump};
     }
@@ -392,7 +391,7 @@ struct block_compiler2 {
     slot_ref_t _compile_anon_fn(const std::vector<ast::node>& args) {
         // Compiling an anon fn requires that we accumulate a list of closure
         // slots. The values are sealed once the anon fn expression is evaluated.
-        auto& jump_over_inst = builder.push_instr(is2::jump{invalid_inst});
+        auto& jump_over_inst = builder.push_instr(is::jump{invalid_inst});
         // Save the stack top. The fn will run with a clean stack
         const auto old_top    = current_end_slot;
         current_end_slot      = slot_ref_t{0};
@@ -407,7 +406,7 @@ struct block_compiler2 {
             assert(call);
             auto arg_list = call->arguments().as_list();
             assert(arg_list);
-            auto fn_args     = arg_list->nodes[0].clone();
+            auto fn_args     = arg_list->nodes[0];
             auto fn_arg_list = fn_args.as_list();
             assert(fn_arg_list);
             auto                   fn_arg_tup = ast::tuple(std::move(fn_arg_list->nodes));
@@ -415,17 +414,17 @@ struct block_compiler2 {
             std::vector<ast::node> oneoff;
             oneoff.push_back(std::move(fn_arg_tup));
             new_args.push_back(ast::list(std::move(oneoff)));
-            new_args.push_back(arg_list->nodes[1].clone());
+            new_args.push_back(arg_list->nodes[1]);
             new_clauses.emplace_back(
                 ast::node(ast::call(symbol("->"), {}, ast::list(std::move(new_args)))));
         }
         // Compile the code for the actual anon fn
         auto ret_slot = _compile_branches(arg_slot, ast::list(std::move(new_clauses)));
-        builder.push_instr(is2::ret{ret_slot});
+        builder.push_instr(is::ret{ret_slot});
         auto code_end = current_instruction();
         // An inst that will create the closure when we pass over the anon fn expr
         jump_over_inst.target = current_instruction();
-        builder.push_instr(is2::mk_closure{code_begin, code_end});
+        builder.push_instr(is::mk_closure{code_begin, code_end});
         current_end_slot = old_top;
         return consume_slot();
     }
@@ -459,7 +458,7 @@ struct block_compiler2 {
             auto next_slot = compile(n);
             slots.push_back(next_slot);
         }
-        builder.push_instr(is2::mk_list{std::move(slots)});
+        builder.push_instr(is::mk_list{std::move(slots)});
         return consume_slot();
     }
 
@@ -468,7 +467,7 @@ struct block_compiler2 {
         for (auto& el : list.nodes) {
             slots.push_back(_compile_quoted(el));
         }
-        builder.push_instr(is2::mk_list{std::move(slots)});
+        builder.push_instr(is::mk_list{std::move(slots)});
         return consume_slot();
     }
 
@@ -483,7 +482,7 @@ struct block_compiler2 {
             slots.push_back(_compile_quoted(el));
         }
         // TODO: Branch based on slot count
-        builder.push_instr(is2::mk_tuple_n{std::move(slots)});
+        builder.push_instr(is::mk_tuple_n{std::move(slots)});
         return consume_slot();
     }
 
@@ -515,7 +514,7 @@ struct block_compiler2 {
                 // Unbound variable
                 if (binding_expr_depth != 0) {
                     // We're binding a new variable here
-                    builder.push_instr(is2::const_binding_slot{current_end_slot});
+                    builder.push_instr(is::const_binding_slot{current_end_slot});
                     auto new_var_slot = consume_slot();
                     // Announce the slot for the variable:
                     top_varmap().emplace(var_sym->string(), new_var_slot);
@@ -531,7 +530,7 @@ struct block_compiler2 {
         auto target = _compile_quoted(c.target());
         auto meta   = _compile_quoted(ast::node(ast::list()));
         auto args   = _compile_quoted(c.arguments());
-        builder.push_instr(is2::mk_tuple_3{target, meta, args});
+        builder.push_instr(is::mk_tuple_3{target, meta, args});
         return consume_slot();
     }
 
@@ -539,7 +538,7 @@ struct block_compiler2 {
      * Compile an integer literal. Simple.
      */
     slot_ref_t operator()(ast::integer i, expand_quoted = {}) {
-        builder.push_instr(is2::const_int{i});
+        builder.push_instr(is::const_int{i});
         return consume_slot();
     }
 
@@ -551,8 +550,16 @@ struct block_compiler2 {
         return invalid_slot;
     }
 
+    /**
+     * Symbols
+     */
     slot_ref_t operator()(const ast::symbol& s, expand_quoted = {}) {
-        builder.push_instr(is2::const_symbol{s.string()});
+        builder.push_instr(is::const_symbol{s.string()});
+        return consume_slot();
+    }
+
+    slot_ref_t operator()(const ast::string& s, expand_quoted = {}) {
+        builder.push_instr(is::const_str{s});
         return consume_slot();
     }
 };
@@ -560,7 +567,7 @@ struct block_compiler2 {
 
 code::code let::compile(const ast::node& node) {
     let::code::code_builder builder;
-    block_compiler2         comp{builder};
+    block_compiler         comp{builder};
     comp.compile_root(node);
     return builder.save();
     // block_compiler comp;

@@ -15,6 +15,7 @@
 #include "value_fwd.hpp"
 
 #include <variant>
+#include <ostream>
 
 namespace let {
 
@@ -72,6 +73,20 @@ public:
             _value);
     }
 };
+
+inline bool operator==(const value& lhs, const value& rhs) {
+    return lhs.visit([&](const auto& real_value) -> bool {
+        auto rhs_same = rhs.as(tag<std::decay_t<decltype(real_value)>>());
+        return rhs_same && real_value == *rhs_same;
+    });
+}
+
+inline bool operator!=(const value& lhs, const value& rhs) { return !(lhs == rhs); }
+
+inline std::ostream& operator<<(std::ostream& o, const value& rhs) {
+    rhs.visit([&](const auto& val) { o << val; });
+    return o;
+}
 
 }  // namespace let
 

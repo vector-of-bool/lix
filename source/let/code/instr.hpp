@@ -42,6 +42,10 @@ struct const_symbol {
     explicit const_symbol(std::string s)
         : string(std::move(s)) {}
 };
+struct const_str {
+    std::string string;
+    explicit const_str(std::string s) : string(std::move(s)) {}
+};
 struct hard_match {
     slot_ref_t lhs;
     slot_ref_t rhs;
@@ -113,6 +117,7 @@ using any_var = std::variant<ret,
                              eq,
                              const_int,
                              const_symbol,
+                             const_str,
                              hard_match,
                              try_match,
                              const_binding_slot,

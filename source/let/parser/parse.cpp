@@ -562,7 +562,31 @@ struct lit_list_tail : sor<seq<sor<lit_list_elem, keyword_arg>,
 struct lit_list : if_must<seq<one<'['>, meta_prep_arglist>, lit_list_tail> {};
 SET_ERROR_MESSAGE(lit_list_tail, "Expected list element, keyword pair, or closing ']'");
 
-struct lit_string : failure {};
+template <char Delim>
+struct string_inner : star<sor<
+                          // Escaped delimieter:
+                          seq<one<'\\'>, one<Delim>>,
+                          // Non-delimiter non-newline character:
+                          not_one<'\n', '\r', Delim>>> {};
+template <char Delim>
+struct action<string_inner<Delim>> {
+    template <typename Input>
+    static void apply(Input&& in, parser_state& st) {
+        st.push(node(ast::string(in.string())));
+    }
+};
+template <char Delim>
+struct lit_string_end : one<Delim> {};
+template <char Delim>
+struct fail_message<lit_string_end<Delim>> {
+    static std::string string() {
+        char c = Delim;
+        return "Expected " + std::string(&c, 1) + " at the end of string literal";
+    }
+};
+template <char Delim>
+struct lit_string_ : seq<one<Delim>, string_inner<Delim>, must<lit_string_end<Delim>>> {};
+struct lit_string : sor<lit_string_<'\''>, lit_string_<'\"'>> {};
 struct lit_bool : sor<KW("true"), KW("false")> {};
 
 struct ex_var : seq<identifier, not_at<hspace, sor<one<'('>, single_ex>>> {};

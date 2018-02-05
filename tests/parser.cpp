@@ -84,6 +84,7 @@ TEST_CASE("Parse a simple literal", "[parser]") {
         {"fn :food -> 12 end", "{:fn, [], [{:->, [], [[:food], 12]}]}"},
         {"foo.()", "{{:., [], [{:foo, [], :Var}]}, [], []}"},
         {"foo.(12)", "{{:., [], [{:foo, [], :Var}]}, [], [12]}"},
+        {"'string'", "'string'"},
     };
     for (auto[code, canon] : pairs) {
         INFO(code);

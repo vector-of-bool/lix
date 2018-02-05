@@ -13,6 +13,7 @@ struct instr_visitor {
     void operator()(is::const_int i) { ctx.push(i.value); }
     void operator()(is::const_double d) { ctx.push(d.value); }
     void operator()(const is::const_symbol& sym) { ctx.push(let::symbol{sym.string}); }
+    void operator()(const is::const_str& str) { ctx.push(let::string{str.string}); }
     void operator()(is::const_binding_slot s) { ctx.push(binding_slot{s.slot}); }
 
     void operator()(is::ret r) { ctx.pop_frame_return(r.slot); }
@@ -72,17 +73,14 @@ struct instr_visitor {
         // Compare operands for equality/equivalence
         auto& lhs       = ctx.nth(eq.a);
         auto& rhs       = ctx.nth(eq.b);
-        auto  are_equal = _compare_eq(lhs, rhs);
+        auto are_equal = _compare_eq(lhs, rhs);
         ctx.push(are_equal ? let::symbol{"true"} : let::symbol{"false"});
     }
 
     bool _compare_eq(const stack_element& lhs, const stack_element& rhs) {
-        if (auto lhs_int = lhs.as_integer()) {
-            auto rhs_int = rhs.as_integer();
-            return rhs_int && *lhs_int == *rhs_int;
-        } else if (auto lhs_sym = lhs.as_symbol()) {
-            auto rhs_sym = rhs.as_symbol();
-            return rhs_sym && lhs_sym->string() == rhs_sym->string();
+        if (auto lhs_val = lhs.as_value()) {
+            auto rhs_val = rhs.as_value();
+            return rhs_val && *lhs_val == *rhs_val;
         } else {
             assert(false && "TODO: Compare unimplemented");
             std::terminate();
@@ -118,13 +116,6 @@ struct instr_visitor {
             // We're a binding. Fill in the variable slot.
             ctx.bind_slot(bind_slot->slot, rhs);
             return true;
-        } else if (auto lhs_sym = lhs.as_symbol()) {
-            // Symbol matches are just string comparisons
-            auto rhs_sym = rhs.as_symbol();
-            if (!rhs_sym) {
-                return false;
-            }
-            return lhs_sym->string() == rhs_sym->string();
         } else if (auto lhs_tup = lhs.as_ex_tuple()) {
             // We're a tuple match
             auto rhs_tup = rhs.as_ex_tuple();
@@ -132,18 +123,10 @@ struct instr_visitor {
                 return false;
             }
             return _do_match(*lhs_tup, *rhs_tup);
-        } else if (auto lhs_int = lhs.as_integer()) {
-            auto rhs_int = rhs.as_integer();
-            if (!rhs_int) {
-                return false;
-            }
-            if (*lhs_int != *rhs_int) {
-                return false;
-            }
-            return true;
         } else {
-            // TODO: visit() the stack element instead?
-            assert(false && "Unhandled match case");
+            // Other than direct assignment and tuple expansion, we just do
+            // an equality check
+            return _compare_eq(lhs, rhs);
         }
     }
 

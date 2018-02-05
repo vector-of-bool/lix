@@ -43,6 +43,7 @@ struct ostream_node_visitor {
     void operator()(integer i) const { o << i; }
     void operator()(floating f) const { o << f; }
     void operator()(const symbol& s) const { o << s; }
+    void operator()(const string& s) const { o << '\'' << s << '\''; }
     void operator()(const call& c) const {
         o << '{' << c.target() << ", [], " << c.arguments() << '}';
     }
@@ -81,7 +82,8 @@ struct to_value_converter {
     }
     value operator()(ast::integer i) { return i; }
     value operator()(ast::floating f) { return f; }
-    value operator()(ast::symbol s) { return s; }
+    value operator()(const ast::symbol& s) { return s; }
+    value operator()(const ast::string& s) { return s; }
     value operator()(const ast::call& c) {
         std::vector<value> triple;
         triple.emplace_back(c.target().to_value());
@@ -117,11 +119,7 @@ struct from_value_converter {
     node operator()(let::integer i) { return node(i); }
     node operator()(let::real r) { return node(r); }
     node operator()(const let::symbol& s) { return node(s); }
-
-    node operator()(let::string) {
-        /// TODO
-        std::terminate();
-    }
+    node operator()(const let::string& s) { return node(s); }
     node operator()(const let::exec::function&) {
         assert(false && "Cannot use function for AST node");
         std::terminate();
