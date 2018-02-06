@@ -51,19 +51,19 @@ public:
         return *_current_instr++;
     }
 
-    const stack_element& nth(slot_ref_t off) const { return _stack.nth(off); }
+    const let::value& nth(slot_ref_t off) const { return _stack.nth(off); }
 
-    const stack_element& top() const {
+    const let::value& top() const {
         assert(_stack.size() != 0);
         return nth({_stack.size() - 1});
     }
 
-    void push(stack_element el) { _stack.push(std::move(el)); }
+    void push(let::value el) { _stack.push(std::move(el)); }
     void pop() {
         assert(_stack.size() != 0);
         rewind({_stack.size() - 1});
     }
-    void bind_slot(slot_ref_t slot, stack_element el) {
+    void bind_slot(slot_ref_t slot, let::value el) {
         auto& dest = _stack.nth_mut(slot);
         assert(dest.as_binding_slot() && "Binding to non-binding slot");
         dest = std::move(el);
@@ -107,14 +107,14 @@ public:
     let::value execute_frame(code::code c);
     let::value execute_frame(code::code c, code::iterator);
     void pop_frame_return(slot_ref_t r);
-    const stack_element& nth(slot_ref_t n) const;
-    const stack_element& top() const;
-    void push(stack_element e);
+    const let::value& nth(slot_ref_t n) const;
+    const let::value& top() const;
+    void push(let::value e);
     void jump(inst_offset_t);
     void set_test_state(bool);
     bool get_test_state() const noexcept;
     void rewind(slot_ref_t);
-    void bind_slot(slot_ref_t slot, stack_element e);
+    void bind_slot(slot_ref_t slot, let::value e);
 
     std::optional<module> get_module(const std::string& name) const;
 

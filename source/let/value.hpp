@@ -14,10 +14,37 @@
 
 #include "value_fwd.hpp"
 
-#include <variant>
 #include <ostream>
+#include <variant>
 
 namespace let {
+
+namespace exec {
+
+namespace detail {
+
+struct binding_slot {
+    code::slot_ref_t slot;
+};
+
+struct cons {
+    std::reference_wrapper<const let::value> head;
+    std::reference_wrapper<const let::value> tail;
+};
+
+inline std::ostream& operator<<(std::ostream& o, binding_slot) {
+    o << "<unbound>";
+    return o;
+}
+
+inline std::ostream& operator<<(std::ostream& o, cons) {
+    o << "<cons>";
+    return o;
+}
+
+}  // namespace detail
+
+}  // namespace exec
 
 class value {
     std::variant<let::integer,
@@ -28,6 +55,8 @@ class value {
                  let::list,
                  let::exec::function,
                  let::exec::closure,
+                 let::exec::detail::binding_slot,
+                 let::exec::detail::cons,
                  let::boxed>
         _value;
 
@@ -44,9 +73,7 @@ public:
             return nullopt;                                                                        \
         }                                                                                          \
     }                                                                                              \
-    opt_ref<const type> as(tag<type>) const noexcept {                                             \
-        return as_##basename();                                                                    \
-    }                                                                                              \
+    opt_ref<const type> as(tag<type>) const noexcept { return as_##basename(); }                   \
     static_assert(true)
 
     DECL_METHODS(let::integer, integer);
@@ -57,6 +84,8 @@ public:
     DECL_METHODS(let::list, list);
     DECL_METHODS(let::exec::function, function);
     DECL_METHODS(let::exec::closure, closure);
+    DECL_METHODS(let::exec::detail::binding_slot, binding_slot);
+    DECL_METHODS(let::exec::detail::cons, cons);
     DECL_METHODS(let::boxed, boxed);
 #undef DECL_METHODS
 

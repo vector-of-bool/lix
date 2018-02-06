@@ -132,9 +132,17 @@ struct from_value_converter {
         assert(false && "Cannot use boxed value for AST node");
         std::terminate();
     }
+    node operator()(let::exec::detail::binding_slot) {
+        assert(false && "Cannot use binding slot for AST node");
+        std::terminate();
+    }
+    node operator()(let::exec::detail::cons) {
+        assert(false && "Cannot use cons for AST node");
+        std::terminate();
+    }
 };
 
 }  // namespace
 
 let::value node::to_value() const { return visit(to_value_converter{}); }
-node node::from_value(const let::value& val) { return val.visit(from_value_converter{}); }
+node       node::from_value(const let::value& val) { return val.visit(from_value_converter{}); }

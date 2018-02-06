@@ -21,8 +21,8 @@ struct instr_visitor {
     void execute(is::call c) {
         auto& callee = ctx.nth(c.fn);
         if (auto closure = callee.as_closure()) {
-            auto arg = ctx.nth(c.arg);
-            std::vector<stack_element> caps_tmp;
+            auto                    arg = ctx.nth(c.arg);
+            std::vector<let::value> caps_tmp;
             for (auto cap : closure->captures()) {
                 caps_tmp.push_back(ctx.nth(cap));
             }
@@ -33,17 +33,7 @@ struct instr_visitor {
             }
             ctx.push(std::move(arg));
         } else if (auto fn = callee.as_function()) {
-            if (auto arg = ctx.nth(c.arg).as_value()) {
-                ctx.push(fn->call_ll(ctx, *arg));
-            } else if (auto ex_tup = ctx.nth(c.arg).as_ex_tuple()) {
-                auto tup = convert_ex(*ex_tup);
-                ctx.push(fn->call_ll(ctx, tup));
-            } else if (auto ex_list = ctx.nth(c.arg).as_ex_list()) {
-                // TODO
-                std::terminate();
-            } else {
-                assert(false && "Invalid function argument");
-            }
+            ctx.push(fn->call_ll(ctx, ctx.nth(c.arg)));
         } else {
             assert(false && "Call to non-function");
         }
@@ -81,18 +71,8 @@ struct instr_visitor {
         // Compare operands for equality/equivalence
         auto& lhs       = ctx.nth(eq.a);
         auto& rhs       = ctx.nth(eq.b);
-        auto  are_equal = _compare_eq(lhs, rhs);
+        auto  are_equal = lhs == rhs;
         ctx.push(are_equal ? let::symbol{"true"} : let::symbol{"false"});
-    }
-
-    bool _compare_eq(const stack_element& lhs, const stack_element& rhs) {
-        if (auto lhs_val = lhs.as_value()) {
-            auto rhs_val = rhs.as_value();
-            return rhs_val && *lhs_val == *rhs_val;
-        } else {
-            assert(false && "TODO: Compare unimplemented");
-            std::terminate();
-        }
     }
 
     template <typename LHS, typename RHS>
@@ -101,15 +81,28 @@ struct instr_visitor {
         std::terminate();
     }
 
-    bool _do_match(const ex_tuple& lhs, const ex_tuple& rhs) {
-        if (lhs.elements.size() != rhs.elements.size()) {
+    bool _do_match(const tuple& lhs, const tuple& rhs) {
+        if (lhs.size() != rhs.size()) {
             return false;
         }
-        auto       lhs_iter = lhs.elements.begin();
-        const auto lhs_end  = lhs.elements.end();
-        auto       rhs_iter = rhs.elements.begin();
+        for (auto i = 0u; i < lhs.size(); ++i) {
+            auto did_match = _match(lhs[i], rhs[i]);
+            if (!did_match) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool _do_match(const let::list& lhs, const let::list& rhs) {
+        if (lhs.size() != rhs.size()) {
+            return false;
+        }
+        auto       lhs_iter = lhs.begin();
+        const auto lhs_end  = lhs.end();
+        auto       rhs_iter = rhs.begin();
         while (lhs_iter != lhs_end) {
-            auto did_match = _do_match(*lhs_iter, *rhs_iter);
+            auto did_match = _match(*lhs_iter, *rhs_iter);
             if (!did_match) {
                 return false;
             }
@@ -119,51 +112,58 @@ struct instr_visitor {
         return true;
     }
 
-    bool _do_match(const ex_cons& lhs, const ex_list& list) {
+    bool _do_match(const cons& lhs, const let::list& list) {
         auto& head = lhs.head;
         auto& tail = lhs.tail;
-        if (list.elements.size() < 2) {
+        if (list.size() < 2) {
             return false;
         }
-        auto head_matched = _do_match(head, list.elements[0]);
+        auto head_matched = _match(head, *list.begin());
         if (!head_matched) {
             return false;
         }
-        std::vector<stack_element> tail_els{list.elements.begin() + 1, list.elements.end()};
-        ex_list                    tail_list{std::move(tail_els)};
-        return _do_match(tail, tail_list);
+        std::vector<value> tail_els{list.begin() + 1, list.end()};
+        let::list          tail_list{std::move(tail_els)};
+        return _match(tail, tail_list);
     }
 
-    bool _do_match(const stack_element& lhs, const stack_element& rhs) {
+    bool _match(const let::value& lhs, const let::value& rhs) {
         if (auto bind_slot = lhs.as_binding_slot()) {
             // We're a binding. Fill in the variable slot.
             ctx.bind_slot(bind_slot->slot, rhs);
             return true;
-        } else if (auto lhs_tup = lhs.as_ex_tuple()) {
+        } else if (auto lhs_tup = lhs.as_tuple()) {
             // We're a tuple match
-            auto rhs_tup = rhs.as_ex_tuple();
+            auto rhs_tup = rhs.as_tuple();
             if (!rhs_tup) {
                 return false;
             }
             return _do_match(*lhs_tup, *rhs_tup);
-        } else if (auto lhs_cons = lhs.as_ex_cons()) {
+        } else if (auto lhs_cons = lhs.as_cons()) {
             // A cons!
-            auto rhs_list = rhs.as_ex_list();
+            auto rhs_list = rhs.as_list();
             if (!rhs_list) {
                 return false;
             }
             return _do_match(*lhs_cons, *rhs_list);
+        } else if (auto lhs_list = lhs.as_list()) {
+            // A list. We just match each element
+            auto rhs_list = rhs.as_list();
+            if (!rhs_list) {
+                return false;
+            }
+            return _do_match(*lhs_list, *rhs_list);
         } else {
             // Other than direct assignment and tuple expansion, we just do
             // an equality check
-            return _compare_eq(lhs, rhs);
+            return lhs == rhs;
         }
     }
 
     void execute(is::hard_match mat) {
         auto& lhs       = ctx.nth(mat.lhs);
         auto& rhs       = ctx.nth(mat.rhs);
-        auto  did_match = _do_match(lhs, rhs);
+        auto  did_match = _match(lhs, rhs);
         if (!did_match) {
             // TODO: Throw, not assert
             assert(false && "Match failure");
@@ -172,47 +172,48 @@ struct instr_visitor {
     void execute(is::try_match mat) {
         auto& lhs       = ctx.nth(mat.lhs);
         auto& rhs       = ctx.nth(mat.rhs);
-        auto  did_match = _do_match(lhs, rhs);
+        auto  did_match = _match(lhs, rhs);
         ctx.set_test_state(did_match);
     }
-    void execute(is::mk_tuple_0) { ctx.push(ex_tuple{{}}); }
-    void execute(is::mk_tuple_1 t) { ctx.push(ex_tuple{{ctx.nth(t.a)}}); }
-    void execute(is::mk_tuple_2 t) { ctx.push(ex_tuple{{ctx.nth(t.a), ctx.nth(t.b)}}); }
+    void execute(is::mk_tuple_0) { ctx.push(let::tuple{{}}); }
+    void execute(is::mk_tuple_1 t) { ctx.push(let::tuple{{ctx.nth(t.a)}}); }
+    void execute(is::mk_tuple_2 t) { ctx.push(let::tuple{{ctx.nth(t.a), ctx.nth(t.b)}}); }
     void execute(is::mk_tuple_3 t) {
-        ctx.push(ex_tuple{{ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c)}});
+        ctx.push(let::tuple{{ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c)}});
     }
     void execute(is::mk_tuple_4 t) {
-        ctx.push(ex_tuple{{ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c), ctx.nth(t.d)}});
+        ctx.push(let::tuple{{ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c), ctx.nth(t.d)}});
     }
     void execute(is::mk_tuple_5 t) {
-        ctx.push(ex_tuple{{ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c), ctx.nth(t.d), ctx.nth(t.e)}});
+        ctx.push(
+            let::tuple{{ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c), ctx.nth(t.d), ctx.nth(t.e)}});
     }
     void execute(is::mk_tuple_6 t) {
-        ctx.push(ex_tuple{
+        ctx.push(let::tuple{
             {ctx.nth(t.a), ctx.nth(t.b), ctx.nth(t.c), ctx.nth(t.d), ctx.nth(t.e), ctx.nth(t.f)}});
     }
     void execute(is::mk_tuple_7 t) {
-        ctx.push(ex_tuple{{ctx.nth(t.a),
-                           ctx.nth(t.b),
-                           ctx.nth(t.c),
-                           ctx.nth(t.d),
-                           ctx.nth(t.e),
-                           ctx.nth(t.f),
-                           ctx.nth(t.g)}});
+        ctx.push(let::tuple{{ctx.nth(t.a),
+                             ctx.nth(t.b),
+                             ctx.nth(t.c),
+                             ctx.nth(t.d),
+                             ctx.nth(t.e),
+                             ctx.nth(t.f),
+                             ctx.nth(t.g)}});
     }
     void execute(const is::mk_tuple_n& t) {
-        ex_tuple new_tup;
+        std::vector<let::value> new_tup;
         for (auto slot : t.slots) {
-            new_tup.elements.push_back(ctx.nth(slot));
+            new_tup.push_back(ctx.nth(slot));
         }
-        ctx.push(std::move(new_tup));
+        ctx.push(let::tuple(std::move(new_tup)));
     }
     void execute(const is::mk_list& l) {
-        ex_list new_list;
+        std::vector<let::value> new_list;
         for (auto slot : l.slots) {
-            new_list.elements.push_back(ctx.nth(slot));
+            new_list.push_back(ctx.nth(slot));
         }
-        ctx.push(std::move(new_list));
+        ctx.push(let::list(std::move(new_list)));
     }
     void execute(const is::mk_closure& clos) {
         auto cl = closure(ctx.current_code(),
@@ -223,7 +224,7 @@ struct instr_visitor {
     void execute(const is::mk_cons& c) {
         auto& lhs = ctx.nth(c.lhs);
         auto& rhs = ctx.nth(c.rhs);
-        ctx.push(ex_cons{lhs, rhs});
+        ctx.push(cons{lhs, rhs});
     }
     void execute(is::no_clause) { throw std::runtime_error{"No matching clause"}; }
     void execute(is::dot d) {
@@ -247,11 +248,11 @@ struct instr_visitor {
     void execute(is::push_front push) {
         auto& elem = ctx.nth(push.elem);
         auto& list = ctx.nth(push.list);
-        if (auto list_ptr = list.as_ex_list()) {
+        if (auto list_ptr = list.as_list()) {
             // TODO: Sort out the ex_list vs list and forward-linking persistence
-            auto copy = list_ptr->elements;
-            copy.insert(copy.begin(), elem);
-            ctx.push(ex_list{std::move(copy)});
+            std::vector<let::value> new_list{list_ptr->begin(), list_ptr->end()};
+            new_list.insert(new_list.begin(), elem);
+            ctx.push(let::list{std::move(new_list)});
         } else {
             throw std::runtime_error{"Attempt to push to non-list"};
         }
@@ -307,7 +308,7 @@ public:
         if (_call_frames.size() != 0) {
             auto value = _top_frame().top();
             _top_frame().pop();
-            return value.convert_to_value();
+            return value;
         } else {
             assert(_bottom_ret);
             auto val    = std::move(*_bottom_ret);
@@ -316,7 +317,7 @@ public:
         }
     }
 
-    const stack_element& nth(slot_ref_t n) const { return _top_frame().nth(n); }
+    const let::value& nth(slot_ref_t n) const { return _top_frame().nth(n); }
 
     void register_module(const std::string& name, module mod) {
         const auto did_insert = _modules.emplace(name, std::move(mod)).second;
@@ -331,7 +332,7 @@ public:
     }
 
     void pop_frame_return(slot_ref_t r) {
-        auto rv = _top_frame().nth(r).convert_to_value();
+        auto rv = _top_frame().nth(r);
         pop_frame_no_ret();
         if (_call_frames.empty()) {
             _bottom_ret.emplace(std::move(rv));
@@ -342,12 +343,11 @@ public:
 
     void push_frame(code::code c, code::iterator inst) { _call_frames.emplace(c, inst); }
 
-    void push(stack_element el) { _top_frame().push(std::move(el)); }
+    void push(value&& el) { _top_frame().push(std::move(el)); }
+    void push(const value& el) { _top_frame().push(el); }
     void rewind(slot_ref_t slot) { _top_frame().rewind(slot); }
 
-    void bind_slot(slot_ref_t slot, stack_element el) {
-        _top_frame().bind_slot(slot, std::move(el));
-    }
+    void bind_slot(slot_ref_t slot, const let::value& el) { _top_frame().bind_slot(slot, el); }
 
     void jump(inst_offset_t target) { _top_frame().jump(target); }
 };
@@ -380,17 +380,15 @@ let::value context::execute_frame(code::code c, code::iterator iter) {
     return _impl->execute_frame(c, iter, *this);
 }
 
-void context::push(stack_element el) { _impl->push(el); }
+void context::push(let::value el) { _impl->push(el); }
 void context::rewind(slot_ref_t slot) { _impl->rewind(slot); }
 void context::jump(inst_offset_t dest) { _impl->jump(dest); }
 void context::set_test_state(bool b) { _impl->_test_state = b; }
 bool context::get_test_state() const noexcept { return _impl->_test_state; }
-void context::bind_slot(slot_ref_t slot, stack_element el) {
-    _impl->bind_slot(slot, std::move(el));
-}
-const stack_element& context::nth(slot_ref_t n) const { return _impl->nth(n); }
-const stack_element& context::top() const { return _impl->_top_frame().top(); }
-const code::code&    context::current_code() const { return _impl->_top_frame().code(); }
+void context::bind_slot(slot_ref_t slot, let::value el) { _impl->bind_slot(slot, std::move(el)); }
+const let::value& context::nth(slot_ref_t n) const { return _impl->nth(n); }
+const let::value& context::top() const { return _impl->_top_frame().top(); }
+const code::code& context::current_code() const { return _impl->_top_frame().code(); }
 
 std::optional<let::exec::module> context::get_module(const std::string& name) const {
     auto mod_iter = _impl->_modules.find(name);

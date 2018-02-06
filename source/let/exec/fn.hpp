@@ -3,8 +3,8 @@
 
 #include <memory>
 #include <optional>
-#include <type_traits>
 #include <ostream>
+#include <type_traits>
 
 #include <let/util.hpp>
 #include <let/value.hpp>
@@ -13,7 +13,6 @@
 
 namespace let::exec {
 
-class stack_element;
 class context;
 
 namespace detail {
@@ -29,7 +28,9 @@ template <typename Func>
 class erased_fn_impl : public erased_fn_base {
     Func _fn;
 
-    template <typename Void, typename = std::enable_if_t<std::is_same<Void, void>::value>, typename = void>
+    template <typename Void,
+              typename = std::enable_if_t<std::is_same<Void, void>::value>,
+              typename = void>
     let::value _do_call(context&, const let::value&, tag<Void>) const {
         static_assert(
             !std::is_same<Void, void>::value,
@@ -59,8 +60,7 @@ public:
 
 }  // namespace detail
 
-template <typename Function,
-          typename = std::enable_if_t<!std::is_same<std::decay_t<Function>, function>::value>>
+template <typename Function, typename Void, typename Any>
 function::function(Function&& fn)
     : _func(std::make_shared<detail::erased_fn_impl<std::decay_t<Function>>>(
           std::forward<Function>(fn))) {}

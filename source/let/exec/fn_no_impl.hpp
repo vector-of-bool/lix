@@ -8,21 +8,23 @@
 
 namespace let::exec {
 
-class stack_element;
 class context;
 
 namespace detail {
 
 class erased_fn_base;
 
-} // namespace detail
+}  // namespace detail
 
 class function {
     std::shared_ptr<const detail::erased_fn_base> _func;
 
 public:
     template <typename Function,
-              typename = std::enable_if_t<!std::is_same<std::decay_t<Function>, function>::value>>
+              typename = std::enable_if_t<!std::is_same<std::decay_t<Function>, function>::value>,
+              typename = decltype(
+                  std::declval<const std::decay_t<Function>&>()(std::declval<let::exec::context&>(),
+                                                                std::declval<const let::value&>()))>
     function(Function&& fn);
 
     let::value call_ll(context&, const let::value&) const;
@@ -30,4 +32,4 @@ public:
 
 }  // namespace let::exec
 
-#endif // LET_EXEC_FN_NO_IMPL_HPP_INCLUDED
+#endif  // LET_EXEC_FN_NO_IMPL_HPP_INCLUDED
