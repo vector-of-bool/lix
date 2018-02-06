@@ -26,6 +26,7 @@ struct function_def_acc {
 };
 
 struct function_accumulator {
+    std::string                             module_name;
     std::map<std::string, function_def_acc> fns;
 };
 
@@ -53,6 +54,65 @@ value register_function(context&, const value& args) {
     return symbol("ok");
 }
 
+struct function_final_pass {
+    ast::node run_final_pass(const ast::node&            node,
+                             const std::string&          fn_name,
+                             const function_accumulator& fn_acc) {
+        return node.visit(
+            [&](const auto& what) -> ast::node { return do_final_pass(what, fn_name, fn_acc); });
+    }
+
+    ast::node do_final_pass(ast::integer i, const std::string&, const function_accumulator&) {
+        return ast::node(i);
+    }
+    ast::node do_final_pass(ast::floating i, const std::string&, const function_accumulator&) {
+        return ast::node(i);
+    }
+    ast::node do_final_pass(const ast::symbol& s, const std::string&, const function_accumulator&) {
+        return ast::node(s);
+    }
+    ast::node do_final_pass(const ast::string& s, const std::string&, const function_accumulator&) {
+        return ast::node(s);
+    }
+    ast::node do_final_pass(const ast::list&            l,
+                            const std::string&          fn_name,
+                            const function_accumulator& fn_acc) {
+        std::vector<ast::node> new_nodes;
+        for (auto& n : l.nodes) {
+            new_nodes.push_back(run_final_pass(n, fn_name, fn_acc));
+        }
+        return ast::list(std::move(new_nodes));
+    }
+    ast::node do_final_pass(const ast::tuple&           t,
+                            const std::string&          fn_name,
+                            const function_accumulator& fn_acc) {
+        std::vector<ast::node> new_nodes;
+        for (auto& n : t.nodes) {
+            new_nodes.push_back(run_final_pass(n, fn_name, fn_acc));
+        }
+        return ast::tuple(std::move(new_nodes));
+    }
+    ast::node do_final_pass(const ast::call&            call,
+                            const std::string&          fn_name,
+                            const function_accumulator& fn_acc) {
+        auto args = run_final_pass(call.arguments(), fn_name, fn_acc);
+        if (auto lhs_sym = call.target().as_symbol()) {
+            // Call to a symbol. Maybe an unqualified call?
+            auto fn_def_iter = fn_acc.fns.find(lhs_sym->string());
+            if (fn_def_iter != fn_acc.fns.end()) {
+                // It's an unqualified call to a function in this module. Nice
+                auto qual = ast::call(symbol("."),
+                                      {},
+                                      ast::list({symbol(fn_acc.module_name), call.target()}));
+                return ast::call(qual, call.meta(), std::move(args));
+            }
+        }
+        // Just another call
+        auto lhs = run_final_pass(call.target(), fn_name, fn_acc);
+        return ast::call(lhs, call.meta(), std::move(args));
+    }
+};
+
 value finalize_module(context& ctx, const function_accumulator& fns) {
     std::vector<ast::node> block;
     block.emplace_back(
@@ -64,7 +124,8 @@ value finalize_module(context& ctx, const function_accumulator& fns) {
         for (auto& def : defs.defs) {
             auto l2r_args = ast::list({def.arglist, def.body});
             auto l2r_call = ast::call(symbol("->"), {}, std::move(l2r_args));
-            clauses.emplace_back(std::move(l2r_call));
+            auto fn_final = function_final_pass{}.run_final_pass(l2r_call, name, fns);
+            clauses.emplace_back(std::move(fn_final));
         }
 
         auto anon_fn_ast = ast::call(symbol("fn"), {}, ast::list(std::move(clauses)));
@@ -91,7 +152,7 @@ value compile_module(context& ctx, const value& args) {
     return ctx.push_environment([&] {
         ctx.set_environment_value("compiling_module", let::boxed(mod));
         ctx.set_environment_value("module_function_accumulator",
-                                  let::boxed(function_accumulator()));
+                                  let::boxed(function_accumulator{mod_sym->string(), {}}));
         auto inner_expanded = let::expand_macros(ctx, ast);
         auto inner_code     = let::compile(inner_expanded);
         // Execute the code that will accumulate our attributes and function definitions
@@ -201,7 +262,7 @@ let::value define_module_function(let::exec::context& ctx, const let::value& arg
     assert(fn_iter != mod_fn_acc.fns.end());
     auto& fn_acc = fn_iter->second;
 
-    auto expanded = expand_macros(ctx, body_ast);
+    auto                expanded = expand_macros(ctx, body_ast);
     fn_acc.defs.emplace_back(std::move(def_arglist), std::move(expanded));
 
     return symbol("ok");
