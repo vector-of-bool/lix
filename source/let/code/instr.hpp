@@ -85,8 +85,9 @@ struct mk_list {
     std::vector<slot_ref_t> slots;
 };
 struct mk_closure {
-    inst_offset_t code_begin;
-    inst_offset_t code_end;
+    inst_offset_t           code_begin;
+    inst_offset_t           code_end;
+    std::vector<slot_ref_t> captures;
 };
 struct mk_cons {
     slot_ref_t lhs;

@@ -22,7 +22,15 @@ struct instr_visitor {
         auto& callee = ctx.nth(c.fn);
         if (auto closure = callee.as_closure()) {
             auto arg = ctx.nth(c.arg);
+            std::vector<stack_element> caps_tmp;
+            for (auto cap : closure->captures()) {
+                caps_tmp.push_back(ctx.nth(cap));
+            }
             ctx.push_frame(closure->code(), closure->code_begin());
+            // Push the values it has captured
+            for (auto& el : caps_tmp) {
+                ctx.push(el);
+            }
             ctx.push(std::move(arg));
         } else if (auto fn = callee.as_function()) {
             if (auto arg = ctx.nth(c.arg).as_value()) {
@@ -207,7 +215,9 @@ struct instr_visitor {
         ctx.push(std::move(new_list));
     }
     void execute(const is::mk_closure& clos) {
-        auto cl = closure(ctx.current_code(), ctx.current_code().begin() + clos.code_begin.index);
+        auto cl = closure(ctx.current_code(),
+                          ctx.current_code().begin() + clos.code_begin.index,
+                          clos.captures);
         ctx.push(std::move(cl));
     }
     void execute(const is::mk_cons& c) {

@@ -24,6 +24,12 @@ using let::code::slot_ref_t;
 constexpr slot_ref_t    invalid_slot = {static_cast<std::size_t>(-1)};
 constexpr inst_offset_t invalid_inst = {static_cast<std::size_t>(-1)};
 using varslot_map                    = std::map<std::string, slot_ref_t>;
+struct capture {
+    std::string varname;
+    slot_ref_t  parent_slot;
+    slot_ref_t  inner_slot;
+};
+using capture_list = std::vector<capture>;
 
 struct expand_quoted {};
 
@@ -386,22 +392,92 @@ struct block_compiler {
         return {fail_jump, exit_jump};
     }
 
+    void _find_closure_variables(const ast::node& node, capture_list& dest) {
+        node.visit([&](const auto& real) -> void { _do_find_closure_variables(real, dest); });
+    }
+
+    void _do_find_closure_variables(const ast::list& l, capture_list& dest) {
+        for (auto& n : l.nodes) {
+            _find_closure_variables(n, dest);
+        }
+    }
+
+    void _do_find_closure_variables(const ast::tuple& t, capture_list& dest) {
+        for (auto& n : t.nodes) {
+            _find_closure_variables(n, dest);
+        }
+    }
+
+    void _do_find_closure_variables(ast::integer, capture_list&) {}
+    void _do_find_closure_variables(ast::floating, capture_list&) {}
+    void _do_find_closure_variables(const ast::symbol&, capture_list&) {}
+    void _do_find_closure_variables(const ast::string&, capture_list&) {}
+    void _do_find_closure_variables(const ast::call& call, capture_list& dest) {
+        if (auto var_sym = call.arguments().as_symbol(); var_sym && var_sym->string() == "Var") {
+            auto lhs_sym = call.target().as_symbol();
+            assert(lhs_sym);
+            auto var_slot = slot_for_variable(lhs_sym->string());
+            if (!var_slot) {
+                // Not a variable in scope.
+                return;
+            }
+            dest.push_back(capture{lhs_sym->string(), *var_slot, dest.size()});
+        } else {
+            _find_closure_variables(call.target(), dest);
+            _find_closure_variables(call.arguments(), dest);
+        }
+    }
+
     /**
      * Compile an anonymous function. This is tough, and the basis for all
      * abstractions.
      */
     slot_ref_t _compile_anon_fn(const std::vector<ast::node>& args) {
-        // Compiling an anon fn requires that we accumulate a list of closure
-        // slots. The values are sealed once the anon fn expression is evaluated.
+        // To find the variable captures, we'll do a pass over the anonymous
+        // function in search of variables from the parent scopes.
+        capture_list captures;
+        for (auto& n : args) {
+            _find_closure_variables(n, captures);
+        }
+        auto old_scope  = std::move(variable_scopes);
+        variable_scopes = {};
+        variable_scopes.emplace_back();
+        // Bring the captures we've discovered into scope
+        for (auto& cap : captures) {
+            top_varmap().emplace(cap.varname, cap.inner_slot);
+        }
+        // We start with a new basis slot, and reserve space for the captures
+        auto old_top_slot = current_end_slot;
+        current_end_slot  = slot_ref_t{captures.size()};
+        // A jump to jump over the anon fn:
         auto& jump_over_inst = builder.push_instr(is::jump{invalid_inst});
         // Save the stack top. The fn will run with a clean stack
-        const auto old_top    = current_end_slot;
-        current_end_slot      = slot_ref_t{0};
+        // The first instruction in the fn code:
         const auto code_begin = current_instruction();
+        // Compile the fn body:
+        auto       ret_slot   = _compile_anon_fn_inner(args);
+        // Generate the final return instruction:
+        builder.push_instr(is::ret{ret_slot});
+        auto code_end = current_instruction();
+        // Fulfill the jump-over:
+        jump_over_inst.target = current_instruction();
+        // An inst that will create the closure when we pass over the anon fn expr
+        std::vector<slot_ref_t> closure_slots;
+        for (auto& cap: captures) {
+            closure_slots.push_back(cap.parent_slot);
+        }
+        builder.push_instr(is::mk_closure{code_begin, code_end, std::move(closure_slots)});
+        // Restore the state of the compile before we started the fn
+        variable_scopes  = std::move(old_scope);
+        current_end_slot = old_top_slot;
+        return consume_slot();
+    }
+
+    slot_ref_t _compile_anon_fn_inner(const std::vector<ast::node>& args) {
+        // The argument is always the first slot (after captures):
+        const slot_ref_t       arg_slot = consume_slot();
         // Convert the clause list into a case statement that we match against
         // with the argument list
-        // The argument is always the first slot:
-        const slot_ref_t       arg_slot = consume_slot();
         std::vector<ast::node> new_clauses;
         for (auto& clause : args) {
             auto call = clause.as_call();
@@ -421,14 +497,7 @@ struct block_compiler {
                 ast::node(ast::call(symbol("->"), {}, ast::list(std::move(new_args)))));
         }
         // Compile the code for the actual anon fn
-        auto ret_slot = _compile_branches(arg_slot, ast::list(std::move(new_clauses)));
-        builder.push_instr(is::ret{ret_slot});
-        auto code_end = current_instruction();
-        // An inst that will create the closure when we pass over the anon fn expr
-        jump_over_inst.target = current_instruction();
-        builder.push_instr(is::mk_closure{code_begin, code_end});
-        current_end_slot = old_top;
-        return consume_slot();
+        return _compile_branches(arg_slot, ast::list(std::move(new_clauses)));
     }
 
     /**
@@ -462,8 +531,8 @@ struct block_compiler {
         if (args.count() != 2) {
             throw std::runtime_error{"Cons expects two arguments"};
         }
-        auto  lhs_slot = compile(args.nth(0));
-        auto  rhs_slot = compile(args.nth(1));
+        auto lhs_slot = compile(args.nth(0));
+        auto rhs_slot = compile(args.nth(1));
         builder.push_instr(is::push_front{lhs_slot, rhs_slot});
         return consume_slot();
     }
