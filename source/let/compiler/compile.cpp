@@ -263,6 +263,12 @@ struct block_compiler {
             }
         }
         // No special function
+        if (auto lhs_sym = lhs.as_symbol()) {
+            // Unqualified call is not allowed at this level in the AST
+            throw std::runtime_error{
+                "Unqualified function call does not resolve to a function in the current module: "
+                + lhs_sym->string()};
+        }
         auto                    fn_slot = compile(lhs);
         std::vector<slot_ref_t> arg_slots;
         for (auto& arg : args.nodes) {
@@ -455,7 +461,7 @@ struct block_compiler {
         // The first instruction in the fn code:
         const auto code_begin = current_instruction();
         // Compile the fn body:
-        auto       ret_slot   = _compile_anon_fn_inner(args);
+        auto ret_slot = _compile_anon_fn_inner(args);
         // Generate the final return instruction:
         builder.push_instr(is::ret{ret_slot});
         auto code_end = current_instruction();
@@ -463,7 +469,7 @@ struct block_compiler {
         jump_over_inst.target = current_instruction();
         // An inst that will create the closure when we pass over the anon fn expr
         std::vector<slot_ref_t> closure_slots;
-        for (auto& cap: captures) {
+        for (auto& cap : captures) {
             closure_slots.push_back(cap.parent_slot);
         }
         builder.push_instr(is::mk_closure{code_begin, code_end, std::move(closure_slots)});
@@ -475,7 +481,7 @@ struct block_compiler {
 
     slot_ref_t _compile_anon_fn_inner(const std::vector<ast::node>& args) {
         // The argument is always the first slot (after captures):
-        const slot_ref_t       arg_slot = consume_slot();
+        const slot_ref_t arg_slot = consume_slot();
         // Convert the clause list into a case statement that we match against
         // with the argument list
         std::vector<ast::node> new_clauses;
