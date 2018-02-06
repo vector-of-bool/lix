@@ -26,6 +26,18 @@ const let::symbol& unpack_one(const let::tuple& input, tag<let::symbol>) {
 }
 
 template <std::size_t I>
+const let::list& unpack_one(const let::tuple& input, tag<let::list>) {
+    if (input.size() <= I) {
+        throw std::runtime_error{"Not enough arguments to unpack"};
+    }
+    auto sym_ptr = input[I].as_list();
+    if (!sym_ptr) {
+        throw std::runtime_error{"Argument is not a list"};
+    }
+    return *sym_ptr;
+}
+
+template <std::size_t I>
 const let::boxed& unpack_one(const let::tuple& input, tag<let::boxed>) {
     if (input.size() <= I) {
         throw std::runtime_error{"Not enough arguments to unpack"};

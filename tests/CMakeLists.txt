@@ -16,6 +16,7 @@ foreach(name IN ITEMS
         rt
         compiler
         program
+        libs
         )
     set(tname cpp.test.${name})
     add_executable(${tname} ${name}.cpp)

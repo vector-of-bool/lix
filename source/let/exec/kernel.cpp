@@ -5,7 +5,7 @@
 
 #include <let/util/args.hpp>
 
-#include <iostream>
+#include <algorithm>
 
 using namespace let;
 using namespace let::exec;
@@ -291,10 +291,18 @@ module build_bootstrap_module() {
     return ret;
 }
 
+let::value k_reverse_list(exec::context&, const let::value& v) {
+    const auto& [list] = unpack_arg_tuple<let::list>(v);
+    std::vector<let::value> new_list{list.begin(), list.end()};
+    std::reverse(new_list.begin(), new_list.end());
+    return let::list(std::move(new_list));
+}
+
 module build_kernel_module() {
     module ret;
     ret.add_macro("defmodule", &defmodule_macro);
     ret.add_macro("def", &def_macro);
+    ret.add_function("__reverse_list", &k_reverse_list);
     return ret;
 }
 

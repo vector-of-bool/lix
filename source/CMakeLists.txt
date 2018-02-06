@@ -65,6 +65,10 @@ add_library(let STATIC
 
     let/util/args.hpp
     let/util/args.cpp
+
+    let/libs/libs.hpp
+    let/libs/Enum.hpp
+    let/libs/Enum.cpp
     )
 add_library(let::let ALIAS let)
 target_link_libraries(let PUBLIC let::base PRIVATE tao::pegtl)
