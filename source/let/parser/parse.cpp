@@ -294,7 +294,9 @@ public:
     }
 };
 
-using hspace = star<blank>;
+struct comment_no_nl : seq<one<'#'>, star<not_one<'\n'>>> {};
+
+using hspace = seq<star<blank>, opt<comment_no_nl>>;
 
 /**
  * Rule that consumes at least one horizontal space
@@ -325,9 +327,23 @@ struct ws {
         auto ptr        = in.current();
         auto to_check   = in.size();
         int  n_consumed = 0;
-        while (to_check-- && std::isspace(*ptr)) {
-            ++n_consumed;
-            ++ptr;
+        while (to_check--) {
+            if (std::isspace(*ptr)) {
+                ++n_consumed;
+                ++ptr;
+            } else if (*ptr == '#') {
+                ++n_consumed;
+                ++ptr;
+                while (to_check-- && *ptr != '\n') {
+                    ++n_consumed;
+                    ++ptr;
+                }
+                // Consume final newline:
+                ++n_consumed;
+                ++ptr;
+            } else {
+                break;
+            }
         }
         in.bump(n_consumed);
         return true;
@@ -344,9 +360,23 @@ struct rws {
         auto ptr        = in.current();
         auto to_check   = in.size();
         int  n_consumed = 0;
-        while (to_check-- && std::isspace(*ptr)) {
-            ++n_consumed;
-            ++ptr;
+        while (to_check--) {
+            if (std::isspace(*ptr)) {
+                ++n_consumed;
+                ++ptr;
+            } else if (*ptr == '#') {
+                ++n_consumed;
+                ++ptr;
+                while (to_check-- && *ptr != '\n') {
+                    ++n_consumed;
+                    ++ptr;
+                }
+                // Consume final newline:
+                ++n_consumed;
+                ++ptr;
+            } else {
+                break;
+            }
         }
         in.bump(n_consumed);
         return n_consumed != 0;

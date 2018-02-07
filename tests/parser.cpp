@@ -87,6 +87,13 @@ TEST_CASE("Parse a simple literal", "[parser]") {
         {"'string'", "'string'"},
         {"hd|tail", "{:|, [], [{:hd, [], :Var}, {:tail, [], :Var}]}"},
         {"[hd|tail]", "[{:|, [], [{:hd, [], :Var}, {:tail, [], :Var}]}]"},
+        {"5 ", "5"},
+        {"5", "5"},
+        {"5\n\n", "5"},
+        {"5 # Comment", "5"},
+        {"5 \n# Comment\n", "5"},
+        {"5#Comment", "5"},
+        {"foo(# Comment\n)", "{:foo, [], []}"},
     };
     for (auto[code, canon] : pairs) {
         INFO(code);
