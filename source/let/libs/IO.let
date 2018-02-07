@@ -1,0 +1,3 @@
+defmodule IO do
+  def puts(str), do: :__io.puts(str)
+end

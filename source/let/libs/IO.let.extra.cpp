@@ -1,9 +1,6 @@
-#include "IO.hpp"
-
 #include <cstdlib>
 
-#include <let/eval.hpp>
-#include <let/util/args.hpp>
+#include <let/exec/context.hpp>
 
 namespace {
 
@@ -22,14 +19,6 @@ let::exec::module& io_basemod() {
     return mod;
 }
 
-}  // namespace
+void do_extra(let::exec::context& ctx) { ctx.register_module("__io", io_basemod()); }
 
-void let::libs::IO::eval(let::exec::context& ctx) {
-    ctx.register_module("__io", io_basemod());
-    let::eval(R"(
-      defmodule IO do
-        def puts(str), do: :__io.puts(str)
-      end
-    )",
-              ctx);
-}
+} // namespace

@@ -23,6 +23,35 @@ if(AFL_AS)
         )
 endif()
 
+get_filename_component(gen_dir "${CMAKE_CURRENT_BINARY_DIR}/gen" ABSOLUTE)
+get_filename_component(hpp_in let/libs/mod_template.hpp.in ABSOLUTE)
+get_filename_component(cpp_in let/libs/mod_template.cpp.in ABSOLUTE)
+get_filename_component(gen_script gen-lib.cmake ABSOLUTE)
+set(gen_lib_sources)
+foreach(libname IO Enum)
+    get_filename_component(gen_header "${gen_dir}/let/libs/${libname}.hpp" ABSOLUTE)
+    get_filename_component(gen_source "${gen_dir}/let/libs/${libname}.cpp" ABSOLUTE)
+    get_filename_component(in_mod let/libs/${libname}.let ABSOLUTE)
+    set(more_deps)
+    if(EXISTS "${in_mod}.extra.cpp")
+        set(more_deps "${in_mod}.extra.cpp")
+    endif()
+    add_custom_command(
+        OUTPUT "${gen_header}" "${gen_source}"
+        DEPENDS "${hpp_in}" "${cpp_in}" "${in_mod}" "${gen_script}" ${more_deps}
+        COMMAND "${CMAKE_COMMAND}"
+            -D in_mod=${in_mod}
+            -D in_hpp=${hpp_in}
+            -D in_cpp=${cpp_in}
+            -D out_hpp=${gen_header}
+            -D out_cpp=${gen_source}
+            -D name=${libname}
+            -P "${gen_script}"
+        COMMENT "Generating code for ${libname} library"
+        )
+    list(APPEND gen_lib_sources "${gen_header}" "${gen_source}")
+endforeach()
+
 add_library(let STATIC
     let/parser/parser.hpp
     let/parser/parser.cpp
@@ -67,13 +96,11 @@ add_library(let STATIC
     let/util/args.cpp
 
     let/libs/libs.hpp
-    let/libs/Enum.hpp
-    let/libs/Enum.cpp
-    let/libs/IO.hpp
-    let/libs/IO.cpp
+    ${gen_lib_sources}
     )
 add_library(let::let ALIAS let)
 target_link_libraries(let PUBLIC let::base PRIVATE tao::pegtl)
+target_include_directories(let PUBLIC $<BUILD_INTERFACE:${gen_dir}>)
 
 add_executable(let-parse let/parser/parse-main.cpp)
 target_link_libraries(let-parse PRIVATE let::let)
