@@ -5,6 +5,7 @@
 #include <let/exec/kernel.hpp>
 
 #include "Enum.hpp"
+#include "IO.hpp"
 
 namespace let::libs {
 
