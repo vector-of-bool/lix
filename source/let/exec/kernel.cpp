@@ -295,7 +295,8 @@ let::value k_reverse_list(exec::context&, const let::value& v) {
     const auto& [list] = unpack_arg_tuple<let::list>(v);
     std::vector<let::value> new_list{list.begin(), list.end()};
     std::reverse(new_list.begin(), new_list.end());
-    return let::list(std::move(new_list));
+    return let::list(std::make_move_iterator(new_list.begin()),
+                     std::make_move_iterator(new_list.end()));
 }
 
 module build_kernel_module() {

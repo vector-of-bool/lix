@@ -4,7 +4,7 @@
 #include <let/boxed.hpp>
 #include <let/exec/closure.hpp>
 #include <let/exec/fn_no_impl.hpp>
-#include <let/list.hpp>
+#include <let/list_fwd.hpp>
 #include <let/numbers.hpp>
 #include <let/string.hpp>
 #include <let/symbol.hpp>
@@ -118,5 +118,7 @@ inline std::ostream& operator<<(std::ostream& o, const value& rhs) {
 }
 
 }  // namespace let
+
+#include <let/list.hpp>
 
 #endif  // LET_VALUE_HPP_INCLUDED

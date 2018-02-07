@@ -71,7 +71,9 @@ struct to_value_converter {
         for (auto& n : l.nodes) {
             vals.emplace_back(n.to_value());
         }
-        return let::list(std::move(vals));
+        auto move_begin = std::make_move_iterator(vals.begin());
+        auto move_end   = std::make_move_iterator(vals.end());
+        return let::list(move_begin, move_end);
     }
     value operator()(const ast::tuple& t) {
         std::vector<value> vals;

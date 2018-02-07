@@ -115,16 +115,14 @@ struct instr_visitor {
     bool _do_match(const cons& lhs, const let::list& list) {
         auto& head = lhs.head;
         auto& tail = lhs.tail;
-        if (list.size() < 2) {
+        if (list.size() < 1) {
             return false;
         }
         auto head_matched = _match(head, *list.begin());
         if (!head_matched) {
             return false;
         }
-        std::vector<value> tail_els{list.begin() + 1, list.end()};
-        let::list          tail_list{std::move(tail_els)};
-        return _match(tail, tail_list);
+        return _match(tail, list.pop_front());
     }
 
     bool _match(const let::value& lhs, const let::value& rhs) {
@@ -213,7 +211,8 @@ struct instr_visitor {
         for (auto slot : l.slots) {
             new_list.push_back(ctx.nth(slot));
         }
-        ctx.push(let::list(std::move(new_list)));
+        ctx.push(let::list(std::make_move_iterator(new_list.begin()),
+                           std::make_move_iterator(new_list.end())));
     }
     void execute(const is::mk_closure& clos) {
         auto cl = closure(ctx.current_code(),
@@ -249,10 +248,7 @@ struct instr_visitor {
         auto& elem = ctx.nth(push.elem);
         auto& list = ctx.nth(push.list);
         if (auto list_ptr = list.as_list()) {
-            // TODO: Sort out the ex_list vs list and forward-linking persistence
-            std::vector<let::value> new_list{list_ptr->begin(), list_ptr->end()};
-            new_list.insert(new_list.begin(), elem);
-            ctx.push(let::list{std::move(new_list)});
+            ctx.push(list_ptr->push_front(elem));
         } else {
             throw std::runtime_error{"Attempt to push to non-list"};
         }

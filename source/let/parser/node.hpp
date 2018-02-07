@@ -73,7 +73,7 @@ public:
         : _var(std::make_unique<node_var>(std::move(s))) {}
     node(call c)
         : _var(std::make_unique<node_var>(std::move(c))) {}
-    node(string s)
+    explicit node(string s)
         : _var(std::make_unique<node_var>(std::move(s))) {}
 
 #define DEF_OBS(type)                                                                              \
