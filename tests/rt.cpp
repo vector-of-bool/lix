@@ -301,6 +301,51 @@ TEST_CASE("Anonymous fn 3") {
     CHECK(val == 15);
 }
 
+TEST_CASE("Anonymous fn 4") {
+    auto code = R"(
+        value = 12
+        fun = fn
+            1 -> 124
+            2 -> 45
+            1, 55 ->
+                intermediate = value + 12
+                intermediate - 3
+        end
+        fun.(1, 55)
+    )";
+    auto ast  = let::ast::parse(code);
+    CHECK_NOTHROW(let::compile(ast));
+    auto block = let::compile(ast);
+    INFO(code);
+    INFO(block);
+    REQUIRE_NOTHROW(let::eval(ast));
+    auto val = let::eval(ast);
+    CHECK(val == 21);
+}
+
+TEST_CASE("Anonymous fn 5") {
+    auto code = R"(
+        value = 12
+        fun = fn
+            1 -> 124
+            2 -> 45
+            1, 55 ->
+                sum = 1 + 2
+                fn -> sum end
+        end
+        new_fun = fun.(1, 55)
+        new_fun.()
+    )";
+    auto ast  = let::ast::parse(code);
+    CHECK_NOTHROW(let::compile(ast));
+    auto block = let::compile(ast);
+    INFO(code);
+    INFO(block);
+    REQUIRE_NOTHROW(let::eval(ast));
+    auto val = let::eval(ast);
+    CHECK(val == 3);
+}
+
 TEST_CASE("Define function") {
     auto code = R"(
         mod = :__let.register_module(MyModule)

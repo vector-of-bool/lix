@@ -21,14 +21,10 @@ struct instr_visitor {
     void execute(is::call c) {
         auto& callee = ctx.nth(c.fn);
         if (auto closure = callee.as_closure()) {
-            auto                    arg = ctx.nth(c.arg);
-            std::vector<let::value> caps_tmp;
-            for (auto cap : closure->captures()) {
-                caps_tmp.push_back(ctx.nth(cap));
-            }
+            auto arg = ctx.nth(c.arg);
             ctx.push_frame(closure->code(), closure->code_begin());
             // Push the values it has captured
-            for (auto& el : caps_tmp) {
+            for (auto& el : closure->captures()) {
                 ctx.push(el);
             }
             ctx.push(std::move(arg));
@@ -215,9 +211,13 @@ struct instr_visitor {
                            std::make_move_iterator(new_list.end())));
     }
     void execute(const is::mk_closure& clos) {
+        std::vector<let::value> captured;
+        for (auto& slot : clos.captures) {
+            captured.push_back(ctx.nth(slot));
+        }
         auto cl = closure(ctx.current_code(),
                           ctx.current_code().begin() + clos.code_begin.index,
-                          clos.captures);
+                          std::move(captured));
         ctx.push(std::move(cl));
     }
     void execute(const is::mk_cons& c) {

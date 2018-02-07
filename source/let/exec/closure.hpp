@@ -13,12 +13,12 @@ namespace let::exec {
 class context;
 
 class closure {
-    let::code::code               _code;
-    let::code::iterator           _first_instr;
-    std::vector<code::slot_ref_t> _captures;
+    let::code::code         _code;
+    let::code::iterator     _first_instr;
+    std::vector<let::value> _captures;
 
 public:
-    closure(code::code c, code::iterator iter, std::vector<code::slot_ref_t> caps)
+    closure(code::code c, code::iterator iter, std::vector<let::value> caps)
         : _code(c)
         , _first_instr(iter)
         , _captures(std::move(caps)) {}
