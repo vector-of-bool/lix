@@ -262,7 +262,7 @@ let::value define_module_function(let::exec::context& ctx, const let::value& arg
     assert(fn_iter != mod_fn_acc.fns.end());
     auto& fn_acc = fn_iter->second;
 
-    auto                expanded = expand_macros(ctx, body_ast);
+    auto expanded = expand_macros(ctx, body_ast);
     fn_acc.defs.emplace_back(std::move(def_arglist), std::move(expanded));
 
     return symbol("ok");
