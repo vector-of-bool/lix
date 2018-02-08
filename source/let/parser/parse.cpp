@@ -589,7 +589,7 @@ struct lit_list_tail : sor<seq<sor<lit_list_elem, keyword_arg>,
                                    // Comma:
                                    if_must<seq<one<','>, ws>, lit_list_tail>>>,
                            one<']'>> {};
-struct lit_list : if_must<seq<one<'['>, meta_prep_arglist>, lit_list_tail> {};
+struct lit_list : if_must<seq<one<'['>, ws, meta_prep_arglist>, lit_list_tail> {};
 SET_ERROR_MESSAGE(lit_list_tail, "Expected list element, keyword pair, or closing ']'");
 
 template <char Delim>
