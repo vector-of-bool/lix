@@ -101,8 +101,9 @@ add_library(let STATIC
     ${gen_lib_sources}
     )
 add_library(let::let ALIAS let)
-target_link_libraries(let PUBLIC let::base PRIVATE tao::pegtl)
+target_link_libraries(let PUBLIC let::base PRIVATE $<BUILD_INTERFACE:tao::pegtl>)
 target_include_directories(let PUBLIC $<BUILD_INTERFACE:${gen_dir}>)
+set_property(TARGET let PROPERTY EXPORT_NAME let::let)
 
 add_executable(let-parse let/parser/parse-main.cpp)
 target_link_libraries(let-parse PRIVATE let::let)
@@ -110,3 +111,18 @@ add_executable(let-compile let/compiler/compile-main.cpp)
 target_link_libraries(let-compile PRIVATE let::let)
 add_executable(let-eval let/eval-main.cpp)
 target_link_libraries(let-eval PRIVATE let::let)
+
+install(
+    TARGETS let let-base
+    EXPORT let-targets
+    RUNTIME DESTINATION ${LET_INSTALL_INFIX}/bin
+    ARCHIVE DESTINATION ${LET_INSTALL_INFIX}/lib
+    INCLUDES DESTINATION ${LET_INSTALL_INFIX}/include
+    )
+
+install(
+    DIRECTORY let ${gen_dir}/let
+    DESTINATION "${LET_INSTALL_INFIX}/include"
+    FILES_MATCHING
+        PATTERN *.hpp
+)
