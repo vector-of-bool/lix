@@ -76,6 +76,8 @@ add_library(let STATIC
     let/exec/kernel.cpp
     let/exec/closure.cpp
     let/exec/closure.cpp
+    let/exec/exec.hpp
+    let/exec/exec.cpp
 
     let/code/builder.hpp
     let/code/builder.cpp

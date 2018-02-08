@@ -2,6 +2,7 @@
 
 #include <let/compiler/compile.hpp>
 #include <let/exec/module.hpp>
+#include <let/exec/exec.hpp>
 
 #include <let/util/args.hpp>
 
@@ -138,7 +139,7 @@ value finalize_module(context& ctx, const function_accumulator& fns) {
 
     auto block_ast = ast::call(symbol("__block__"), {}, ast::list(std::move(block)));
     auto code      = let::compile(block_ast);
-    return ctx.execute_frame(code);
+    return exec::executor(code).execute_all(ctx);
 }
 
 value compile_module(context& ctx, const value& args) {
@@ -156,7 +157,7 @@ value compile_module(context& ctx, const value& args) {
         auto inner_expanded = let::expand_macros(ctx, ast);
         auto inner_code     = let::compile(inner_expanded);
         // Execute the code that will accumulate our attributes and function definitions
-        ctx.execute_frame(inner_code);
+        exec::executor(inner_code).execute_all(ctx);
         // Now we compile and run some ethereal code that produce the actual
         // module code.
         auto acc_val = ctx.get_environment_value("module_function_accumulator");

@@ -2,6 +2,7 @@
 #include <let/compiler/compile.hpp>
 #include <let/eval.hpp>
 #include <let/exec/context.hpp>
+#include <let/exec/exec.hpp>
 #include <let/exec/kernel.hpp>
 #include <let/list.hpp>
 #include <let/parser/parse.hpp>
@@ -183,7 +184,7 @@ TEST_CASE("Call function") {
     CHECK_NOTHROW(let::compile(ast));
     auto block = let::compile(ast);
     INFO(block);
-    let::exec::context ctx{block};
+    let::exec::executor ex{block};
 
     let::exec::module mod;
     mod.add_function("test_fn", [](auto&, auto arg) {
@@ -198,8 +199,9 @@ TEST_CASE("Call function") {
         return *int_ + 71;
     });
 
+    let::exec::context ctx;
     ctx.register_module("Test", mod);
-    auto value = ctx.execute_n(100);
+    auto value = ex.execute_n(ctx, 100);
     REQUIRE(value);
     REQUIRE(value->as_integer());
     CHECK(*value->as_integer() == 83);

@@ -3,6 +3,7 @@
 #include <let/compiler/compile.hpp>
 #include <let/compiler/macro.hpp>
 #include <let/exec/context.hpp>
+#include <let/exec/exec.hpp>
 #include <let/exec/kernel.hpp>
 #include <let/parser/node.hpp>
 #include <let/parser/parse.hpp>
@@ -19,23 +20,24 @@ TEST_CASE("Compile a simple expression") {
     // Should compile to four instructions:
     CHECK(block.size() == 4);
     // Try to run it
-    let::exec::context ctx{block};
-    ctx.execute_n(3);
-    CHECK(*ctx.top().as_integer() == 4);
+    let::exec::executor ex{block};
+    let::exec::context  ctx;
+    ex.execute_n(ctx, 3);
 }
 
 TEST_CASE("Compile from a string") {
-    auto               ast   = let::ast::parse("4 + 5");
-    auto               block = let::compile(ast);
-    let::exec::context ctx{block};
-    auto               ret = ctx.execute_n(3000);
+    auto                ast   = let::ast::parse("4 + 5");
+    auto                block = let::compile(ast);
+    let::exec::executor ex{block};
+    let::exec::context  ctx;
+    auto                ret = ex.execute_n(ctx, 3000);
     REQUIRE(ret);
     REQUIRE(ret->as_integer());
     CHECK(*ret->as_integer() == 9);
 }
 
 TEST_CASE("Expand some macros") {
-    auto code     = R"(
+    auto code = R"(
         defmodule MyModule do
             def my_fun do
                 something(meow)
