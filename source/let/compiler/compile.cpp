@@ -35,6 +35,22 @@ struct expand_quoted {};
 
 using varscope_stack = std::vector<varslot_map>;
 
+opt_ref<const string> get_var_string(const ast::node& n) {
+    auto call = n.as_call();
+    if (!call) {
+        return std::nullopt;
+    }
+    auto varsym = call->target().as_symbol();
+    if (!varsym) {
+        return std::nullopt;
+    }
+    auto var_arg = call->arguments().as_symbol();
+    if (!var_arg) {
+        return std::nullopt;
+    }
+    return varsym->string();
+}
+
 struct block_compiler {
     code::code_builder& builder;
     varscope_stack      variable_scopes;
@@ -223,16 +239,7 @@ struct block_compiler {
                 return consume_slot();
             } else if (lhs_str == "=") {
                 _check_binary(args);
-                binding_expr_depth++;
-                auto lhs_slot = compile(args.nodes[0]);
-                binding_expr_depth--;
-                auto rhs_slot = compile(args.nodes[1]);
-                if (clause_test_depth != 0) {
-                    throw std::runtime_error{
-                        "Bindings `=` are not allowed within function or `case` clause heads"};
-                }
-                builder.push_instr(is::hard_match{lhs_slot, rhs_slot});
-                return rhs_slot;
+                return _compile_assign(args.nodes);
             } else if (lhs_str == "__block__") {
                 assert(args.nodes.size() != 0 && "Invalid block. Needs at least one expression");
                 auto ret = invalid_slot;
@@ -322,6 +329,33 @@ struct block_compiler {
         return consume_slot();
     }
 
+    slot_ref_t _compile_assign(const std::vector<ast::node>& args) {
+        if (clause_test_depth != 0) {
+            throw std::runtime_error{
+                "Bindings `=` are not allowed within function or `case` clause heads"};
+        }
+        auto left_var_name = get_var_string(args[0]);
+        if (left_var_name) {
+            auto var_slot = slot_for_variable(*left_var_name);
+            if (!var_slot) {
+                // We're a plain variable assignment. We can optimize out
+                // doing bind matching and just alias the variable slot to the
+                // slot of our right-hand side
+                auto rhs_slot = compile(args[1]);
+                top_varmap().emplace(*left_var_name, rhs_slot);
+                return rhs_slot;
+            }
+        }
+        // We get here if we're not just a variable assignment, ie. A more
+        // complete match expression.
+        binding_expr_depth++;
+        auto lhs_slot = compile(args[0]);
+        binding_expr_depth--;
+        auto rhs_slot = compile(args[1]);
+        builder.push_instr(is::hard_match{lhs_slot, rhs_slot});
+        return rhs_slot;
+    }
+
     slot_ref_t _compile_pipe(const std::vector<ast::node>& pipe_args) {
         auto lhs_node = pipe_args[0];
         auto rhs_call = pipe_args[1].as_call();
@@ -334,7 +368,8 @@ struct block_compiler {
         }
         auto new_args = arglist->nodes;
         new_args.insert(new_args.begin(), pipe_args[0]);
-        auto new_ast = ast::call(rhs_call->target(), rhs_call->meta(), ast::list(std::move(new_args)));
+        auto new_ast
+            = ast::call(rhs_call->target(), rhs_call->meta(), ast::list(std::move(new_args)));
         return compile(new_ast);
     }
 
