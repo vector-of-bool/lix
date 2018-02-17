@@ -9,7 +9,7 @@
 
 namespace let::ast {
 
-class parse_error : std::runtime_error {
+class parse_error : public std::runtime_error {
     std::string _line_str;
     int         _line_number;
     int         _column;

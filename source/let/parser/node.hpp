@@ -39,7 +39,18 @@ using floating = double;
 using symbol   = let::symbol;
 using string   = let::string;
 
-class meta {};
+class meta {
+    std::optional<std::pair<string, string>> _fn_details;
+
+public:
+    meta() = default;
+
+    void set_fn_details(std::string module, std::string name) {
+        _fn_details.emplace(module, name);
+    }
+
+    auto& fn_details() const noexcept { return _fn_details; }
+};
 
 struct call {
     std::shared_ptr<node> _target;
@@ -116,7 +127,6 @@ call::call(node el, let::ast::meta m, node args)
     : _target(std::make_shared<node>(std::move(el)))
     , _meta(m)
     , _arguments(std::make_shared<node>(std::move(args))) {}
-
 
 inline ast::node make_variable(const std::string_view& s) {
     return ast::call(symbol(s), {}, symbol("Var"));

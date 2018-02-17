@@ -1,0 +1,26 @@
+defmodule Regex do
+  def compile(pattern) do
+    :__regex.compile(pattern)
+  end
+
+  def compile!(pattern) do
+    case compile(pattern) do
+      {:ok, re} -> re
+      {:error, what} -> raise what
+    end
+  end
+
+  def regex?(re) do
+    :__regex.is_regex?(re)
+  end
+
+  def run(re, string) do
+    case regex?(re) do
+      true ->
+        :__regex.run(re, string)
+      false ->
+        c_re = compile!(re)
+        :__regex.run(c_re, string)
+    end
+  end
+end

@@ -4,6 +4,7 @@ target_include_directories(let-base INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT
 add_library(let::base ALIAS let-base)
 if(NOT MSVC)
     target_compile_options(let-base INTERFACE -Wall -Wextra -Wpedantic)
+    target_link_libraries(let-base INTERFACE stdc++fs)
 else()
     target_compile_options(let-base PUBLIC /std:c++latest)
 endif()
@@ -28,7 +29,7 @@ get_filename_component(hpp_in let/libs/mod_template.hpp.in ABSOLUTE)
 get_filename_component(cpp_in let/libs/mod_template.cpp.in ABSOLUTE)
 get_filename_component(gen_script gen-lib.cmake ABSOLUTE)
 set(gen_lib_sources)
-foreach(libname IO Enum)
+foreach(libname IO Enum Path File String Regex Keyword)
     get_filename_component(gen_header "${gen_dir}/let/libs/${libname}.hpp" ABSOLUTE)
     get_filename_component(gen_source "${gen_dir}/let/libs/${libname}.cpp" ABSOLUTE)
     get_filename_component(in_mod let/libs/${libname}.let ABSOLUTE)
@@ -91,8 +92,14 @@ add_library(let STATIC
 
     let/boxed.hpp
     let/boxed.cpp
+    let/value.hpp
+    let/value.cpp
+    let/raise.hpp
+    let/raise.cpp
     let/eval.hpp
     let/eval.cpp
+    let/symbol.hpp
+    let/symbol.cpp
 
     let/util/args.hpp
     let/util/args.cpp

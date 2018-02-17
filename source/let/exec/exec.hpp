@@ -3,8 +3,10 @@
 
 #include <let/exec/context.hpp>
 #include <let/exec/stack.hpp>
+#include <let/raise.hpp>
 
 #include <memory>
+#include <stdexcept>
 
 namespace let::exec {
 

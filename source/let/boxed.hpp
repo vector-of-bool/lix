@@ -1,6 +1,7 @@
 #ifndef LET_BOXED_HPP_INCLUDED
 #define LET_BOXED_HPP_INCLUDED
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -8,6 +9,7 @@
 #include <utility>
 
 #include "refl.hpp"
+#include "value_fwd.hpp"
 
 namespace let {
 
@@ -18,29 +20,39 @@ public:
     virtual std::shared_ptr<boxed_storage_base> clone() const     = 0;
     virtual let::refl::rt_type_info             type_info() const = 0;
     virtual ~boxed_storage_base()                                 = default;
-    virtual void*       dataptr() noexcept                        = 0;
     virtual const void* dataptr() const noexcept                  = 0;
 };
 
 template <typename T>
+struct unref_type {
+    using type = T;
+};
+
+template <typename T>
+struct unref_type<std::reference_wrapper<T>> {
+    using type = T;
+};
+
+template <typename RealType, typename Stored>
 class boxed_storage : public boxed_storage_base {
-    T _value;
+    Stored _value;
+
+    static RealType&       unref(RealType& ref) { return ref; }
+    static const RealType& unref(const RealType& ref) { return ref; }
 
     std::shared_ptr<boxed_storage_base> clone() const override {
-        return std::make_shared<boxed_storage<T>>(_value);
+        return std::make_shared<boxed_storage<RealType, Stored>>(_value);
     }
 
     let::refl::rt_type_info type_info() const override {
-        return let::refl::rt_type_info::for_type<T>();
+        return let::refl::rt_type_info::for_type<RealType>();
     }
 
-    void* dataptr() noexcept override { return std::addressof(_value); }
-
-    const void* dataptr() const noexcept override { return std::addressof(_value); }
+    const void* dataptr() const noexcept override { return std::addressof(unref(_value)); }
 
 public:
     template <typename Other,
-              typename = std::enable_if_t<!std::is_same<std::decay_t<T>, boxed_storage>::value>>
+              typename = std::enable_if_t<!std::is_same<std::decay_t<Other>, boxed_storage>::value>>
     boxed_storage(Other&& o)
         : _value(std::forward<Other>(o)) {}
 };
@@ -55,19 +67,20 @@ class boxed {
 
 public:
     template <typename T,
-              typename = std::enable_if_t<!std::is_same<std::decay_t<T>, boxed>::value
-                                          && is_boxable<T>::value>>
+              typename RealType = std::decay_t<typename detail::unref_type<std::decay_t<T>>::type>,
+              typename          = std::enable_if_t<!std::is_same<RealType, boxed>::value
+                                          && is_boxable<RealType>::value>>
     boxed(T&& value)
-        : _item(std::make_shared<detail::boxed_storage<std::decay_t<T>>>(std::forward<T>(value))) {}
+        : _item(std::make_shared<detail::boxed_storage<RealType, std::decay_t<T>>>(
+              std::forward<T>(value))) {}
 
     boxed(const boxed& other)
         : _item(other._item) {}
 
     let::refl::rt_type_info type_info() const { return _item->type_info(); }
 
-    void* get_dataptr() noexcept { return _item->dataptr(); }
-
     const void* get_dataptr() const noexcept { return _item->dataptr(); }
+    let::value  get_member(std::string_view member_name) const;
 };
 
 class bad_box_cast : std::logic_error {
@@ -186,5 +199,9 @@ inline std::ostream& operator<<(std::ostream& o, const boxed&) {
 }
 
 }  // namespace let
+
+#ifndef LET_VALUE_HPP_INCLUDED
+#include "refl_get_member.hpp"
+#endif
 
 #endif  // LET_BOXED_HPP_INCLUDED

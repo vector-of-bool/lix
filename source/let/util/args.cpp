@@ -60,3 +60,39 @@ const let::value& let::argument_parser::nth(const std::size_t n) const noexcept 
     assert(n < count());
     return _args[n];
 }
+
+namespace {
+
+const let::list& get_as_list(const let::value& val) {
+    auto list = val.as_list();
+    if (!list) {
+        throw std::runtime_error{"Argument object must be a list"};
+    }
+    return *list;
+}
+
+}  // namespace
+
+let::keyword_parser::keyword_parser(const let::value& value)
+    : _list(get_as_list(value)) {}
+
+
+let::opt_ref<const let::value> let::keyword_parser::get(const std::string_view& key) const noexcept {
+    for (auto& val : _list) {
+        auto tup = val.as_tuple();
+        if (!tup) {
+            continue;
+        }
+        if (tup->size() != 2) {
+            continue;
+        }
+        auto kw_sym = (*tup)[0].as_symbol();
+        if (!kw_sym) {
+            continue;
+        }
+        if (kw_sym->string() == key) {
+            return (*tup)[1];
+        }
+    }
+    return let::nullopt;
+}

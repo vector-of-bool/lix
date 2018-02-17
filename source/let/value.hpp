@@ -93,6 +93,12 @@ public:
     value(Integer i)
         : value(integer(i)) {}
 
+    template <typename Boxable,
+              typename = std::enable_if_t<let::is_boxable<std::decay_t<Boxable>>::value>,
+              typename = void>
+    value(Boxable&& b)
+        : value(boxed(std::forward<Boxable>(b))) {}
+
     template <typename Fun, typename... Args>
     decltype(auto) visit(Fun&& fn, Args&&... args) const {
         return std::visit(
@@ -117,8 +123,11 @@ inline std::ostream& operator<<(std::ostream& o, const value& rhs) {
     return o;
 }
 
+std::string to_string(const value&);
+
 }  // namespace let
 
 #include <let/list.hpp>
+#include <let/refl_get_member.hpp>
 
 #endif  // LET_VALUE_HPP_INCLUDED

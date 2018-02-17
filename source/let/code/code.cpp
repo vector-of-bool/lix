@@ -42,9 +42,10 @@ struct code_ostream_visitor {
         o << std::setw(13) << "push_front  " << c.elem << ", " << c.list;
     }
     void operator()(is::eq e) { o << std::setw(13) << "eq  " << e.a << ", " << e.b; }
+    void operator()(is::neq e) { o << std::setw(13) << "neq  " << e.a << ", " << e.b; }
     void operator()(is::const_int i) { o << std::setw(13) << "const_int  " << i.value; }
-    void operator()(const is::const_symbol& sym) {
-        o << std::setw(13) << "const_sym  " << '"' << sym.string << '"';
+    void operator()(is::const_symbol sym) {
+        o << std::setw(13) << "const_sym  " << '"' << sym.sym << '"';
     }
     void operator()(const is::const_str& str) {
         o << std::setw(13) << "const_str  " << '"' << str.string << '"';
@@ -55,6 +56,9 @@ struct code_ostream_visitor {
     }
     void operator()(is::try_match m) {
         o << std::setw(13) << "try_match  " << m.lhs << ", " << m.rhs;
+    }
+    void operator()(is::try_match_conj m) {
+        o << std::setw(13) << "try_match_conj  " << m.lhs << ", " << m.rhs;
     }
     void operator()(is::const_binding_slot s) { o << std::setw(13) << "bind_slot  " << s.slot; }
 
@@ -99,11 +103,16 @@ struct code_ostream_visitor {
 
     void operator()(is::jump j) { o << std::setw(13) << "jump  " << j.target; }
     void operator()(is::test_true t) { o << std::setw(13) << "test_true  " << t.slot; }
+    void operator()(is::is_list i) { o << std::setw(13) << "is_list  " << i.arg; }
+    void operator()(is::raise r) { o << std::setw(13) << "raise  " << r.arg; }
     void operator()(is::false_jump j) { o << std::setw(13) << "false_jump  " << j.target; }
     void operator()(is::rewind r) { o << std::setw(13) << "rewind  " << r.slot; }
-    void operator()(is::no_clause) {
+    void operator()(is::apply a) {
+        o << std::setw(13) << "apply  " << a.mod << ", " << a.fn << ", " << a.arglist;
+    }
+    void operator()(is::no_clause n) {
         // No matching clause
-        o << std::setw(13) << "no_clause  ";
+        o << std::setw(13) << "no_clause  " << n.unmatched;
     }
 
     void operator()(is::dot d) { o << std::setw(13) << "dot  " << d.object << ", " << d.attr_name; }

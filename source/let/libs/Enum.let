@@ -1,18 +1,65 @@
 defmodule Enum do
-  def map(list, cb),
-    do: _do_map(cb, list, [])
+  def reduce([head|tail], cb) do
+    reduce(tail, head, cb)
+  end
 
-  def _do_map(cb, [hd|tail], acc),
-    do: _do_map(cb, tail, [cb.(hd)|acc])
-  def _do_map(_cb, [], acc),
-    do: reverse(acc)
+  def reduce([head|tail], acc, cb) do
+    new_acc = cb.(head, acc)
+    reduce(tail, new_acc, cb)
+  end
+
+  def reduce([], acc, cb), do: acc
+
+  def map(list, cb) do
+    final = reduce(list, [], fn
+      el, acc -> [cb.(el)|acc]
+    end)
+    reverse(final)
+  end
 
   def reverse(list), do: Kernel.__reverse_list(list)
 
-  def each([hd|tail], cb) do
-    cb.(hd)
-    each(tail, cb)
+  def each(seq, cb),
+    do: reduce(seq, :ok, fn el, :ok -> cb.(el); :ok end)
+
+  def filter(seq, cb) do
+    els = reduce(seq, [], fn
+      el, acc ->
+        case cb.(el) do
+          true -> [el|acc]
+          false -> acc
+        end
+    end)
+    reverse(els)
   end
 
-  def each([], _cb), do: :ok
+  def flatten(list) do
+    reverse reduce(list, [], fn
+      el, acc ->
+        cond do
+          is_list(el) ->
+            reduce(el, acc, fn el2, acc2 -> [el2|acc2] end)
+          true -> [el|acc]
+        end
+    end)
+  end
+
+  def find(list, pred) do
+    find(list, nil, pred)
+  end
+
+  def find(list, default, pred) do
+    pair = reduce(list, {false, nil}, fn
+      el, {false, nil} ->
+        case pred.(el) do
+          true -> {true, el}
+          o -> {false, nil}
+        end
+      _el, {true, el} -> {true, el}
+    end)
+    case pair do
+      {false, nil} -> default
+      {true, ret} -> ret
+    end
+  end
 end

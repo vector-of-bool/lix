@@ -1,8 +1,8 @@
 #include "kernel.hpp"
 
 #include <let/compiler/compile.hpp>
-#include <let/exec/module.hpp>
 #include <let/exec/exec.hpp>
+#include <let/exec/module.hpp>
 
 #include <let/util/args.hpp>
 
@@ -45,13 +45,8 @@ value register_module(context& ctx, const value& args) {
 }
 
 value register_function(context&, const value& args) {
-    const auto& [mod_, sym, fun] = unpack_arg_tuple<boxed, symbol, closure>(args);
-    auto mod                     = mut_box_cast<module>(&mod_);
-    if (!mod) {
-        throw std::runtime_error{
-            ":__let.register_function expectes a module object as first argument"};
-    }
-    mod->add_closure_function(sym.string(), fun);
+    const auto& [mod, sym, fun] = unpack_arg_tuple<module, symbol, closure>(args);
+    mod.add_closure_function(sym.string(), fun);
     return symbol("ok");
 }
 
@@ -97,7 +92,7 @@ struct function_final_pass {
                             const std::string&          fn_name,
                             const function_accumulator& fn_acc) {
         auto args = run_final_pass(call.arguments(), fn_name, fn_acc);
-        if (auto lhs_sym = call.target().as_symbol()) {
+        if (auto lhs_sym = call.target().as_symbol(); lhs_sym && !args.as_symbol()) {
             // Call to a symbol. Maybe an unqualified call?
             auto fn_def_iter = fn_acc.fns.find(lhs_sym->string());
             if (fn_def_iter != fn_acc.fns.end()) {
@@ -120,6 +115,12 @@ value finalize_module(context& ctx, const function_accumulator& fns) {
         ast::make_assignment("__module",
                              ast::make_call("__let", "get_env", symbol("compiling_module"))));
 
+    auto modname_ = ctx.get_environment_value("compiling_module_name");
+    assert(modname_);
+    auto modname_1 = modname_->as_string();
+    assert(modname_1);
+    auto& modname = *modname_1;
+
     for (auto&& [name, defs] : fns.fns) {
         std::vector<ast::node> clauses;
         for (auto& def : defs.defs) {
@@ -129,7 +130,10 @@ value finalize_module(context& ctx, const function_accumulator& fns) {
             clauses.emplace_back(std::move(fn_final));
         }
 
-        auto anon_fn_ast = ast::call(symbol("fn"), {}, ast::list(std::move(clauses)));
+        ast::meta fn_meta;
+        fn_meta.set_fn_details(modname, name);
+        auto anon_fn_ast
+            = ast::call(symbol("fn"), std::move(fn_meta), ast::list(std::move(clauses)));
         block.push_back(ast::make_call("__let",
                                        "register_function",
                                        ast::make_variable("__module"),
@@ -152,6 +156,7 @@ value compile_module(context& ctx, const value& args) {
     module mod;
     return ctx.push_environment([&] {
         ctx.set_environment_value("compiling_module", let::boxed(mod));
+        ctx.set_environment_value("compiling_module_name", mod_sym->string());
         ctx.set_environment_value("module_function_accumulator",
                                   let::boxed(function_accumulator{mod_sym->string(), {}}));
         auto inner_expanded = let::expand_macros(ctx, ast);
@@ -287,6 +292,7 @@ module build_bootstrap_module() {
             }
         } else {
             assert(false && "Invalid arguments to :__let.get_env");
+            std::terminate();
         }
     });
     return ret;

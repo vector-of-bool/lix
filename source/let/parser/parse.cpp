@@ -562,7 +562,7 @@ struct lit_tuple_tail : sor<
                                 one<'}'>>> {};
 SET_ERROR_MESSAGE(lit_tuple_tail, "Expected tuple element, keyword list, or closing \"}\"");
 
-struct lit_tuple : if_must<seq<one<'{'>, meta_prep_arglist>, lit_tuple_tail> {};
+struct lit_tuple : if_must<seq<one<'{'>, ws, meta_prep_arglist>, lit_tuple_tail> {};
 ACTION(lit_tuple) {
     auto nodes = st.pop();
     assert(nodes.as_list());
@@ -602,7 +602,47 @@ template <char Delim>
 struct action<string_inner<Delim>> {
     template <typename Input>
     static void apply(Input&& in, parser_state& st) {
-        st.push(node(ast::string(in.string())));
+        auto&&      inner_str = in.string();
+        auto        citer     = inner_str.begin();
+        auto        cend      = inner_str.end();
+        std::string acc;
+        while (citer != cend) {
+            if (*citer == '\\') {
+                ++citer;
+                if (citer == cend) {
+                    throw det_parser_error{in.position(),
+                                           "Expected escape character following '\\'"};
+                }
+                switch (*citer) {
+                case Delim:
+                    acc.push_back(Delim);
+                    break;
+                case '\\':
+                    acc.push_back('\\');
+                    break;
+                case 'n':
+                    acc.push_back('\n');
+                    break;
+                case 'r':
+                    acc.push_back('\r');
+                    break;
+                case 'f':
+                    acc.push_back('\f');
+                    break;
+                case 'b':
+                    acc.push_back('\b');
+                    break;
+                default:
+                    throw det_parser_error{in.position(),
+                                           "Unknown escape sequence '\\" + std::string(&*citer, 1)
+                                               + "'"};
+                }
+            } else {
+                acc.push_back(*citer);
+            }
+            ++citer;
+        }
+        st.push(node(std::move(acc)));
     }
 };
 template <char Delim>
@@ -616,8 +656,71 @@ struct fail_message<lit_string_end<Delim>> {
 };
 template <char Delim>
 struct lit_string_ : seq<one<Delim>, string_inner<Delim>, must<lit_string_end<Delim>>> {};
-struct lit_string : sor<lit_string_<'\''>, lit_string_<'\"'>> {};
-struct lit_bool : sor<KW("true"), KW("false")> {};
+
+template <char Delim>
+struct raw_string_inner : star<not_at<rep<3, one<Delim>>>, not_one<'\0'>> {};
+template <char Delim>
+struct action<raw_string_inner<Delim>> {
+    template <typename Input>
+    static void apply(Input&& in, parser_state& st) {
+        auto                   inner_str  = in.string();
+        auto                   min_indent = std::numeric_limits<int>::max();
+        std::string::size_type old_nl_pos = 0;
+        while (true) {
+            const auto nl_pos = inner_str.find('\n', old_nl_pos);
+            auto       nl_end = (std::min)(nl_pos, inner_str.size());
+            auto       line = std::string_view(inner_str.data() + old_nl_pos, nl_end - old_nl_pos);
+            auto       line_c_iter = line.begin();
+            while (line_c_iter != line.end()) {
+                if (!std::isspace(*line_c_iter)) {
+                    break;
+                }
+                ++line_c_iter;
+            }
+            if (line_c_iter != line.end()) {
+                // We found a non-whitespace character
+                min_indent = (std::min)(min_indent,
+                                        static_cast<int>(std::distance(line.begin(), line_c_iter)));
+            }
+            if (nl_pos == inner_str.npos) {
+                break;
+            }
+            old_nl_pos = nl_end + 1;
+        }
+        // Now erase the min_indent chars from the front of each line
+        old_nl_pos = 0;
+        std::string acc;
+        while (true) {
+            const auto nl_pos = inner_str.find('\n', old_nl_pos);
+            const auto nl_end = (std::min)(nl_pos, inner_str.size());
+            auto       line = std::string_view(inner_str.data() + old_nl_pos, nl_end - old_nl_pos);
+            auto       new_begin = (std::min)(min_indent, static_cast<int>(line.size()));
+            acc += line.substr(new_begin);
+            if (nl_pos == inner_str.npos) {
+                break;
+            }
+            acc += "\n";
+            old_nl_pos = nl_end + 1;
+        }
+        while (acc.size() && acc[0] == '\n') {
+            acc.erase(acc.begin());
+        }
+        st.push(ast::node(std::move(acc)));
+    }
+};
+template <char Delim>
+struct raw_string_end : rep<3, one<Delim>> {};
+template <char Delim>
+struct fail_message<raw_string_end<Delim>> {
+    static std::string string() { return "Expected raw-string literal terminator"; }
+};
+template <char Delim>
+struct lit_raw_string
+    : seq<raw_string_end<Delim>, raw_string_inner<Delim>, must<raw_string_end<Delim>>> {};
+
+struct lit_string
+    : sor<lit_raw_string<'\''>, lit_string_<'\''>, lit_raw_string<'"'>, lit_string_<'\"'>> {};
+struct lit_special_atom : sor<KW("nil"), KW("true"), KW("false")> {};
 
 struct ex_var : seq<identifier, not_at<hspace, sor<one<'('>, single_ex>>> {};
 MARK_LOGGED(ex_var);
@@ -858,6 +961,11 @@ ACTION(anon_fn) {
     auto clauses = st.pop();
     st.push(call(symbol("fn"), {}, std::move(clauses)));
 }
+template <>
+struct inout_action<anon_fn> {
+    static void enter(parser_state& st) { st.push_unmatched_state(); }
+    static void exit(parser_state& st) { st.pop_unmatched_state(); }
+};
 
 /**
  * A parenthesis-wrapped expression. Anything can be inside!
@@ -869,7 +977,7 @@ SET_ERROR_MESSAGE(one<')'>, "Expected closing parenthesis");
  * The basis expressions. No higher precedence than this!
  */
 struct ex_atomic : sor<ex_parenthesis,
-                       lit_bool,
+                       lit_special_atom,
                        anon_fn,
                        ex_var,
                        lit_list,
@@ -879,7 +987,7 @@ struct ex_atomic : sor<ex_parenthesis,
                        lit_symbol> {};
 
 template <typename Rule>
-struct op_pad : seq<hspace, Rule, ws> {};
+struct op_pad : seq<ws, Rule, ws> {};
 
 // Associativity tags:
 struct left {};
@@ -1032,8 +1140,9 @@ struct ex_sum
                          left> {};
 struct ex_concat
     : ex_binary_operator<sor<STR("++"), STR("--"), STR(".."), STR("<>")>, ex_sum, right> {};
+struct ex_pipe : ex_binary_operator<STR("|>"), ex_concat, left> {};
 struct ex_compare_op : sor<STR("=="), STR("!="), STR("=~")> {};
-struct ex_compare : ex_binary_operator<ex_compare_op, ex_concat, left> {};
+struct ex_compare : ex_binary_operator<ex_compare_op, ex_pipe, left> {};
 struct ex_assign : ex_binary_operator<STR("="), ex_compare, right> {};
 struct ex_binor : ex_binary_operator<STR("|"), ex_assign, right> {};
 struct ex_typespec : ex_binary_operator<STR("::"), ex_binor, right> {};
@@ -1164,7 +1273,7 @@ MARK_LOGGED(rhs);
 ACTION(identifier) { st.push(symbol(in.string())); }
 ACTION(lit_tall_sym) { st.push(symbol(in.string())); }
 ACTION(lit_small_sym) { st.push(symbol(in.string().substr(1))); }
-ACTION(lit_bool) { st.push(symbol(in.string())); }
+ACTION(lit_special_atom) { st.push(symbol(in.string())); }
 // TODO: Remove digit separators from strings:
 ACTION(lit_int) {
     try {

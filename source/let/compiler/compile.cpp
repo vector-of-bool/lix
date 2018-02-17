@@ -52,6 +52,13 @@ struct block_compiler {
     int binding_expr_depth = 0;
 
     /**
+     * Binding clauses (the head of a `case` or `fn` clause) is different than
+     * a regular binding expr. Within its bounds, hard matches become test
+     * matches. We keep track of that here.
+     */
+    int clause_test_depth = 0;
+
+    /**
      * We keep track of where the expressions end up in the slot stack and
      * increment while we advance instructions that produce values
      */
@@ -198,7 +205,7 @@ struct block_compiler {
         }
     }
 
-    slot_ref_t _compile_call(const ast::node& lhs, const ast::list& args) {
+    slot_ref_t _compile_call(const ast::node& lhs, const ast::meta& meta, const ast::list& args) {
         auto lhs_sym = lhs.as_symbol();
         if (lhs_sym) {
             auto& lhs_str = lhs_sym->string();
@@ -220,6 +227,10 @@ struct block_compiler {
                 auto lhs_slot = compile(args.nodes[0]);
                 binding_expr_depth--;
                 auto rhs_slot = compile(args.nodes[1]);
+                if (clause_test_depth != 0) {
+                    throw std::runtime_error{
+                        "Bindings `=` are not allowed within function or `case` clause heads"};
+                }
                 builder.push_instr(is::hard_match{lhs_slot, rhs_slot});
                 return rhs_slot;
             } else if (lhs_str == "__block__") {
@@ -238,12 +249,31 @@ struct block_compiler {
                 auto rhs_slot = compile(args.nodes[1]);
                 builder.push_instr(is::eq{lhs_slot, rhs_slot});
                 return consume_slot();
+            } else if (lhs_str == "!=") {
+                _check_binary(args);
+                auto lhs_slot = compile(args.nodes[0]);
+                auto rhs_slot = compile(args.nodes[1]);
+                builder.push_instr(is::neq{lhs_slot, rhs_slot});
+                return consume_slot();
             } else if (lhs_str == "cond") {
                 return _compile_cond(args.nodes);
             } else if (lhs_str == "case") {
                 return _compile_case(args.nodes);
             } else if (lhs_str == "quote") {
                 return _compile_quote(args);
+            } else if (lhs_str == "is_list") {
+                assert(args.nodes.size() == 1);
+                auto rhs_slot = compile(args.nodes[0]);
+                builder.push_instr(is::is_list{rhs_slot});
+                return consume_slot();
+            } else if (lhs_str == "raise") {
+                if (args.nodes.size() != 1) {
+                    throw std::runtime_error{"'raise' expects one argument"};
+                }
+                auto arg_slot = compile(args.nodes[0]);
+                builder.push_instr(is::raise{arg_slot});
+                // Raise will not consume a slot. It has no expression value
+                return current_end_slot;
             } else if (lhs_str == "__slot!!") {
                 auto arg = args.nodes[0].as_integer();
                 return slot_ref_t{static_cast<std::size_t>(*arg)};
@@ -258,8 +288,20 @@ struct block_compiler {
                     builder.push_instr(is::dot{lhs_slot, rhs_slot});
                     return consume_slot();
                 }
+            } else if (lhs_str == "|>") {
+                _check_binary(args);
+                return _compile_pipe(args.nodes);
             } else if (lhs_str == "fn") {
-                return _compile_anon_fn(args.nodes);
+                return _compile_anon_fn(args.nodes, meta);
+            } else if (lhs_str == "apply") {
+                if (args.nodes.size() != 3) {
+                    throw std::runtime_error{"'apply' expects three arguments"};
+                }
+                auto mod_slot = compile(args.nodes[0]);
+                auto fn_slot  = compile(args.nodes[1]);
+                auto arg_slot = compile(args.nodes[2]);
+                builder.push_instr(is::apply{mod_slot, fn_slot, arg_slot});
+                return consume_slot();
             }
         }
         // No special function
@@ -280,21 +322,39 @@ struct block_compiler {
         return consume_slot();
     }
 
+    slot_ref_t _compile_pipe(const std::vector<ast::node>& pipe_args) {
+        auto lhs_node = pipe_args[0];
+        auto rhs_call = pipe_args[1].as_call();
+        if (!rhs_call) {
+            throw std::runtime_error{"Right-hand of |> operator must be a function call"};
+        }
+        auto arglist = rhs_call->arguments().as_list();
+        if (!arglist) {
+            throw std::runtime_error{"Right-hand of |> operator must be a function call"};
+        }
+        auto new_args = arglist->nodes;
+        new_args.insert(new_args.begin(), pipe_args[0]);
+        auto new_ast = ast::call(rhs_call->target(), rhs_call->meta(), ast::list(std::move(new_args)));
+        return compile(new_ast);
+    }
+
     slot_ref_t _compile_case(const std::vector<ast::node>& case_args) {
         // TODO:  Replace all these asserts with real error handling
-        assert(case_args.size() == 2 && "Invalid arguments to case");
+        auto arg_check = [](bool b) {
+            if (!b) {
+                throw std::runtime_error{"`case` expects one argument and a 'do' clause list"};
+            }
+        };
+        arg_check(case_args.size() == 2);
         auto match_value_slot = compile(case_args[0]);
         auto kwargs           = case_args[1].as_list();
-        assert(kwargs && "Wanted kwargs for cond");
-        assert(kwargs->nodes.size() == 1 && "Want one keyword arg for cond");
+        arg_check(kwargs && kwargs->nodes.size() == 1);
         auto pair = kwargs->nodes[0].as_tuple();
-        assert(pair && "Expected keyword pair for cond");
-        assert(pair->nodes.size() == 2 && "Invalid kw pair");
+        arg_check(pair && pair->nodes.size() == 2);
         auto kw_do = pair->nodes[0].as_symbol();
-        assert(kw_do && "Expected symbol");
-        assert(kw_do->string() == "do");
+        arg_check(kw_do && kw_do->string() == "do");
         auto rhs = pair->nodes[1].as_list();
-        assert(rhs && "Expected list for rhs of `do' argument");
+        arg_check(!!rhs);
         return _compile_branches(match_value_slot, *rhs);
     }
 
@@ -303,33 +363,38 @@ struct block_compiler {
      */
     slot_ref_t _compile_cond(const std::vector<ast::node>& cond_args) {
         // TODO:  Replace all these asserts with real error handling
-        assert(cond_args.size() == 1 && "Invalid arguments to cond");
+        auto arg_check = [](bool b) {
+            if (!b) {
+                throw std::runtime_error{"`cond` expects a single 'do' clause list"};
+            }
+        };
+        arg_check(cond_args.size() == 1);
         auto kwargs = cond_args[0].as_list();
-        assert(kwargs && "Wanted kwargs for cond");
-        assert(kwargs->nodes.size() == 1 && "Want one keyword arg for cond");
+        arg_check(kwargs && kwargs->nodes.size() == 1);
         auto pair = kwargs->nodes[0].as_tuple();
-        assert(pair && "Expected keyword pair for cond");
-        assert(pair->nodes.size() == 2 && "Invalid kw pair");
+        arg_check(pair && pair->nodes.size() == 2);
         auto kw_do = pair->nodes[0].as_symbol();
-        assert(kw_do && "Expected symbol");
-        assert(kw_do->string() == "do");
+        arg_check(kw_do && kw_do->string() == "do");
         auto rhs = pair->nodes[1].as_list();
-        assert(rhs && "Expected list for rhs of `do' argument");
+        arg_check(!!rhs);
         auto true_value = compile(ast::symbol("true"));
         return _compile_branches(true_value, *rhs);
     }
 
-    slot_ref_t _compile_branches(const slot_ref_t match_slot, const ast::list& clause_list) {
+    slot_ref_t _compile_branches(const slot_ref_t         match_slot,
+                                 const ast::list&         clause_list,
+                                 opt_ref<const ast::meta> meta = std::nullopt) {
         // Create a binding slot where the result of the cond will go
         auto res_slot = current_end_slot;
         builder.push_instr(is::const_binding_slot{res_slot});
         consume_slot();
-        return _compile_branch_clauses(match_slot, res_slot, clause_list.nodes);
+        return _compile_branch_clauses(match_slot, res_slot, clause_list.nodes, meta);
     }
 
     slot_ref_t _compile_branch_clauses(slot_ref_t                    match_slot,
                                        slot_ref_t                    res_slot,
-                                       const std::vector<ast::node>& clauses) {
+                                       const std::vector<ast::node>& clauses,
+                                       opt_ref<const ast::meta>      meta = std::nullopt) {
         const auto                 rewind_to = current_end_slot;
         std::vector<inst_offset_t> exit_inst_offsets;
         std::vector<is::jump*>     exit_instrs;
@@ -349,15 +414,29 @@ struct block_compiler {
         }
         // We must have compiled at least one clause, so we'll have a trailing fail target
         assert(prev_false_jump);
-        // TODO: Add a cond-failure case
         prev_false_jump->target = current_instruction();
-        builder.push_instr(is::no_clause{});
+        builder.push_instr(is::rewind{rewind_to});
+        current_end_slot = rewind_to;
+        if (meta && meta->fn_details()) {
+            // We're the tail of a function. We make a message based on the
+            // meta details from the anonymous fn
+            auto& dets        = *meta->fn_details();
+            auto  fname_str   = dets.first + "." + dets.second;
+            auto  fname_slot  = compile(ast::node(fname_str));
+            auto  badarg_slot = compile("badarg"_sym);
+            builder.push_instr(is::mk_tuple_3{badarg_slot, fname_slot, match_slot});
+            auto raise_tup_slot = consume_slot();
+            builder.push_instr(is::raise{raise_tup_slot});
+        } else {
+            builder.push_instr(is::no_clause{match_slot});
+        }
         // Full fill the exit jumps:
         for (auto& jump : exit_instrs) {
             // Resolve the jumps at the end of each clause to jump to the end
             // of the cond block
             jump->target = current_instruction();
         }
+        // Rewind _again_, after the no-clause instructions
         builder.push_instr(is::rewind{rewind_to});
         current_end_slot = rewind_to;
         return res_slot;
@@ -382,7 +461,9 @@ struct block_compiler {
         variable_scopes.emplace_back();
         // Compile the test expression:
         binding_expr_depth++;
+        clause_test_depth++;
         auto test_slot = compile(lhs);
+        clause_test_depth--;
         binding_expr_depth--;
         // Do a conditional jump
         builder.push_instr(is::try_match{test_slot, match_slot});
@@ -438,7 +519,7 @@ struct block_compiler {
      * Compile an anonymous function. This is tough, and the basis for all
      * abstractions.
      */
-    slot_ref_t _compile_anon_fn(const std::vector<ast::node>& args) {
+    slot_ref_t _compile_anon_fn(const std::vector<ast::node>& args, const ast::meta& meta) {
         // To find the variable captures, we'll do a pass over the anonymous
         // function in search of variables from the parent scopes.
         capture_list captures;
@@ -461,7 +542,7 @@ struct block_compiler {
         // The first instruction in the fn code:
         const auto code_begin = current_instruction();
         // Compile the fn body:
-        auto ret_slot = _compile_anon_fn_inner(args);
+        auto ret_slot = _compile_anon_fn_inner(args, meta);
         // Generate the final return instruction:
         builder.push_instr(is::ret{ret_slot});
         auto code_end = current_instruction();
@@ -479,7 +560,7 @@ struct block_compiler {
         return consume_slot();
     }
 
-    slot_ref_t _compile_anon_fn_inner(const std::vector<ast::node>& args) {
+    slot_ref_t _compile_anon_fn_inner(const std::vector<ast::node>& args, const ast::meta& meta) {
         // The argument is always the first slot (after captures):
         const slot_ref_t arg_slot = consume_slot();
         // Convert the clause list into a case statement that we match against
@@ -503,7 +584,7 @@ struct block_compiler {
                 ast::node(ast::call(symbol("->"), {}, ast::list(std::move(new_args)))));
         }
         // Compile the code for the actual anon fn
-        return _compile_branches(arg_slot, ast::list(std::move(new_clauses)));
+        return _compile_branches(arg_slot, ast::list(std::move(new_clauses)), meta);
     }
 
     /**
@@ -625,7 +706,7 @@ struct block_compiler {
         auto& args = call.arguments();
         if (auto arg_list_ptr = args.as_list()) {
             // We're given an argument list. A regular function call
-            return _compile_call(call.target(), *arg_list_ptr);
+            return _compile_call(call.target(), call.meta(), *arg_list_ptr);
         } else {
             // We're a variable reference
             auto var_sym = call.target().as_symbol();
@@ -646,7 +727,8 @@ struct block_compiler {
                     top_varmap().emplace(var_sym->string(), new_var_slot);
                     return new_var_slot;
                 } else {
-                    assert(false && "TODO: compile error (unbound variable)");
+                    throw std::runtime_error{"Name '" + var_sym->string()
+                                             + "' does not name a variable bound at this scope."};
                 }
             }
         }
@@ -680,7 +762,7 @@ struct block_compiler {
      * Symbols
      */
     slot_ref_t operator()(const ast::symbol& s, expand_quoted = {}) {
-        builder.push_instr(is::const_symbol{s.string()});
+        builder.push_instr(is::const_symbol{s});
         return consume_slot();
     }
 

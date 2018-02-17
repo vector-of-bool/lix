@@ -1,0 +1,13 @@
+defmodule String do
+  def contains?(str, pattern) do
+    :__string.find_pattern(str, pattern) != nil
+  end
+
+  def starts_with?(str, pattern) do
+    :__string.find_pattern(str, pattern) == 0
+  end
+
+  def split(str, pattern) do
+    :__string.split(str, pattern)
+  end
+end

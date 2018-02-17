@@ -2,6 +2,7 @@
 #define LET_CODE_INSTR_HPP_INCLUDED
 
 #include <let/code/types.hpp>
+#include <let/symbol.hpp>
 
 #include <cassert>
 #include <string>
@@ -31,6 +32,10 @@ struct eq {
     slot_ref_t a;
     slot_ref_t b;
 };
+struct neq {
+    slot_ref_t a;
+    slot_ref_t b;
+};
 struct const_int {
     std::int64_t value;
 };
@@ -38,9 +43,9 @@ struct const_double {
     double value;
 };
 struct const_symbol {
-    std::string string;
-    explicit const_symbol(std::string s)
-        : string(std::move(s)) {}
+    let::symbol sym;
+    explicit const_symbol(let::symbol s)
+        : sym(s) {}
 };
 struct const_str {
     std::string string;
@@ -107,6 +112,10 @@ struct try_match {
     slot_ref_t lhs;
     slot_ref_t rhs;
 };
+struct try_match_conj {
+    slot_ref_t lhs;
+    slot_ref_t rhs;
+};
 struct false_jump {
     inst_offset_t target;
 };
@@ -117,7 +126,20 @@ struct dot {
     slot_ref_t object;
     slot_ref_t attr_name;
 };
-struct no_clause {};
+struct is_list {
+    slot_ref_t arg;
+};
+struct apply {
+    slot_ref_t mod;
+    slot_ref_t fn;
+    slot_ref_t arglist;
+};
+struct raise {
+    slot_ref_t arg;
+};
+struct no_clause {
+    slot_ref_t unmatched;
+};
 struct debug {};
 
 using any_var = std::variant<ret,
@@ -125,11 +147,13 @@ using any_var = std::variant<ret,
                              add,
                              sub,
                              eq,
+                             neq,
                              const_int,
                              const_symbol,
                              const_str,
                              hard_match,
                              try_match,
+                             try_match_conj,
                              const_binding_slot,
                              mk_tuple_0,
                              mk_tuple_1,
@@ -147,6 +171,9 @@ using any_var = std::variant<ret,
                              rewind,
                              no_clause,
                              dot,
+                             is_list,
+                             apply,
+                             raise,
                              mk_closure,
                              mk_cons,
                              push_front>;

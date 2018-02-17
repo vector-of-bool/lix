@@ -1,9 +1,9 @@
 #ifndef LET_LIST_FWD_HPP_INCLUDED
 #define LET_LIST_FWD_HPP_INCLUDED
 
+#include <iterator>
 #include <memory>
 #include <ostream>
-#include <iterator>
 
 #include "value_fwd.hpp"
 
@@ -65,9 +65,10 @@ public:
               typename = typename std::iterator_traits<Iterator>::difference_type>
     inline list(Iterator first, EndIter last);
 
-    [[nodiscard]] inline list pop_front() const noexcept;
-    [[nodiscard]] inline list push_front(let::value&&) const noexcept;
-    [[nodiscard]] inline list push_front(const let::value&) const;
+    [[nodiscard]] inline list                             pop_front() const noexcept;
+    [[nodiscard]] inline std::pair<let::value, let::list> take_front() const noexcept;
+    [[nodiscard]] inline list                             push_front(let::value&&) const noexcept;
+    [[nodiscard]] inline list                             push_front(const let::value&) const;
 
     inline iterator begin() const noexcept;
     inline iterator end() const noexcept;

@@ -1,0 +1,28 @@
+defmodule File do
+  def write(path, content) do
+    :__file.write(path, content)
+  end
+
+  def write!(path, content) do
+    """
+    Try to write to the given file
+    """
+    case write(path, content) do
+      :ok -> :ok
+      {:error, what} ->
+        raise {:err, {what, "Failed to write to file " + path}}
+    end
+  end
+
+  def rm(path) do
+    :__file.rm(path)
+  end
+
+  def rm!(path) do
+    case rm(path) do
+      :ok -> :ok
+      {:error, what} ->
+        raise {:err, {what, "Failed to remove file " + path}}
+    end
+  end
+end

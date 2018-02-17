@@ -17,6 +17,9 @@ struct inst_offset_t {
 inline constexpr bool operator==(inst_offset_t l, inst_offset_t r) { return l.index == r.index; }
 inline constexpr bool operator!=(inst_offset_t l, inst_offset_t r) { return l.index != r.index; }
 
+inline constexpr bool operator==(slot_ref_t l, slot_ref_t r) { return l.index == r.index; }
+inline constexpr bool operator!=(slot_ref_t l, slot_ref_t r) { return l.index != r.index; }
+
 inline std::ostream& operator<<(std::ostream& o, slot_ref_t ref) {
     o << '$' << ref.index;
     return o;

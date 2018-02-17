@@ -1,5 +1,7 @@
 #include "exec.hpp"
 
+#include <let/refl_get_member.hpp>
+
 using namespace let;
 using namespace let::exec;
 
@@ -39,17 +41,18 @@ public:
         assert(_stack.size() != 0);
         rewind({_stack.size() - 1});
     }
-    void bind_slot(slot_ref_t slot, let::value el) {
-        auto& dest = _stack.nth_mut(slot);
-        assert(dest.as_binding_slot() && "Binding to non-binding slot");
-        dest = std::move(el);
-    }
 
     void jump(inst_offset_t target) {
         auto avail = std::distance(_first_instr, _end_instr);
         assert(target.index > 0);
         assert(target.index < static_cast<std::size_t>(avail));
         _current_instr = _first_instr + target.index;
+    }
+
+    void bind_slot(slot_ref_t slot, let::value el) {
+        auto& dest = _stack.nth_mut(slot);
+        assert(dest.as_binding_slot() && "Binding to non-binding slot");
+        dest = std::move(el);
     }
 
     void rewind(slot_ref_t new_top) { _stack.rewind(new_top); }
@@ -91,8 +94,6 @@ public:
     void push(const value& el) { _top_frame().push(el); }
     void rewind(slot_ref_t slot) { _top_frame().rewind(slot); }
 
-    void bind_slot(slot_ref_t slot, const let::value& el) { _top_frame().bind_slot(slot, el); }
-
     void jump(inst_offset_t target) { _top_frame().jump(target); }
 
     inline void _exec_one(context& ctx);
@@ -119,7 +120,7 @@ struct exec_visitor {
 
     void execute(is::const_int i) { ex.push(i.value); }
     void execute(is::const_double d) { ex.push(d.value); }
-    void execute(const is::const_symbol& sym) { ex.push(let::symbol{sym.string}); }
+    void execute(is::const_symbol sym) { ex.push(let::symbol{sym.sym}); }
     void execute(const is::const_str& str) { ex.push(let::string{str.string}); }
     void execute(is::const_binding_slot s) { ex.push(binding_slot{s.slot}); }
 
@@ -158,10 +159,27 @@ struct exec_visitor {
     void execute(is::rewind r) { ex.rewind(r.slot); }
 
     void execute(is::add add) {
-        auto lhs = ex.nth(add.a).as_integer();
-        auto rhs = ex.nth(add.b).as_integer();
-        // TODO: Check for nullptr
-        ex.push(*lhs + *rhs);
+        auto& lhs = ex.nth(add.a);
+        auto& rhs = ex.nth(add.b);
+        if (auto l_int = lhs.as_integer()) {
+            auto r_int = rhs.as_integer();
+            if (!r_int) {
+                throw std::runtime_error{
+                    "Invalid operands to binary operator '+' (Expected right-hand side to be an "
+                    "integer)"};
+            }
+            ex.push(*l_int + *r_int);
+        } else if (auto l_str = lhs.as_string()) {
+            auto r_str = rhs.as_string();
+            if (!r_str) {
+                throw std::runtime_error{
+                    "Invalid operands to binary operator '+' (Expected right-hand side to be an "
+                    "string)"};
+            }
+            ex.push(*l_str + *r_str);
+        } else {
+            throw std::runtime_error{"Invalid operands to binary operator '+'"};
+        }
     }
     void execute(is::sub sub) {
         auto lhs = ex.nth(sub.a).as_integer();
@@ -178,10 +196,12 @@ struct exec_visitor {
         ex.push(are_equal ? let::symbol{"true"} : let::symbol{"false"});
     }
 
-    template <typename LHS, typename RHS>
-    void _match_failure(const LHS&, const RHS&) {
-        assert(false && "TODO: Match failure");
-        std::terminate();
+    void execute(is::neq eq) {
+        // Compare operands for inequality/inequivalence
+        auto& lhs       = ex.nth(eq.a);
+        auto& rhs       = ex.nth(eq.b);
+        auto  are_equal = lhs == rhs;
+        ex.push(are_equal ? let::symbol{"false"} : let::symbol{"true"});
     }
 
     bool _do_match(const tuple& lhs, const tuple& rhs) {
@@ -231,8 +251,32 @@ struct exec_visitor {
     bool _match(const let::value& lhs, const let::value& rhs) {
         if (auto bind_slot = lhs.as_binding_slot()) {
             // We're a binding. Fill in the variable slot.
-            ex.bind_slot(bind_slot->slot, rhs);
-            return true;
+            auto lhs_slot = bind_slot->slot;
+            auto& lhs_value = ex.nth(lhs_slot);
+            if (lhs_value.as_binding_slot()) {
+                // Unbound slot
+                ex._top_frame().bind_slot(lhs_slot, rhs);
+                return true;
+            } else {
+                // Check that the already-bound value is equivalent to the
+                // current value
+                return lhs_value == rhs;
+            }
+        // } else if (auto rhs_bind_slot = rhs.as_binding_slot()) {
+        //     // Whoa! Right-hand can also be a binding slot in cases where we
+        //     // have a bind (=) within a binding context, such as the head of a
+        //     // function or case clause
+        //     // In this case, we bind backward and put the left into the right
+        //     auto rhs_slot = rhs_bind_slot->slot;
+        //     auto& rhs_value = ex.nth(rhs_slot);
+        //     if (rhs_value.as_binding_slot()) {
+        //         // Right-hand is unbound
+        //         ex._top_frame().bind_slot(rhs_slot, lhs);
+        //         return true;
+        //     } else {
+        //         // Check that the two are equivalent
+        //         return lhs == rhs_value;
+        //     }
         } else if (auto lhs_tup = lhs.as_tuple()) {
             // We're a tuple match
             auto rhs_tup = rhs.as_tuple();
@@ -267,7 +311,8 @@ struct exec_visitor {
         auto  did_match = _match(lhs, rhs);
         if (!did_match) {
             // TODO: Throw, not assert
-            assert(false && "Match failure");
+            throw std::runtime_error{"Failed to match left-hand value " + to_string(lhs)
+                                     + " with right-hand of " + to_string(rhs)};
         }
     }
     void execute(is::try_match mat) {
@@ -275,6 +320,13 @@ struct exec_visitor {
         auto& rhs       = ex.nth(mat.rhs);
         auto  did_match = _match(lhs, rhs);
         ex._test_state  = did_match;
+    }
+    void execute(is::try_match_conj mat) {
+        if (!ex._test_state) {
+            // We only perform our test if we already matched
+            return;
+        }
+        execute(is::try_match{mat.lhs, mat.rhs});
     }
     void execute(is::mk_tuple_0) { ex.push(let::tuple{{}}); }
     void execute(is::mk_tuple_1 t) { ex.push(let::tuple{{ex.nth(t.a)}}); }
@@ -329,7 +381,11 @@ struct exec_visitor {
         auto& rhs = ex.nth(c.rhs);
         ex.push(cons{lhs, rhs});
     }
-    void execute(is::no_clause) { throw std::runtime_error{"No matching clause"}; }
+    void execute(is::no_clause n) {
+        auto val = ex.nth(n.unmatched);
+        auto tup = let::tuple::make(let::symbol("nomatch"), val);
+        let::raise(tup);
+    }
     void execute(is::dot d) {
         auto& lhs = ex.nth(d.object);
         auto  rhs = ex.nth(d.attr_name).as_symbol();
@@ -338,13 +394,73 @@ struct exec_visitor {
             // Module function lookup
             auto mod = ctx.get_module(lhs_sym->string());
             if (!mod) {
-                assert(false && "Bad module name");
+                throw std::runtime_error{"No such module '" + lhs_sym->string() + "'"};
             }
             auto maybe_fn = mod->get_function(rhs->string());
-            assert(maybe_fn && "Bad function for module");
+            if (!maybe_fn) {
+                throw std::runtime_error{"Module '" + lhs_sym->string() + "' has no member '"
+                                         + rhs->string() + "'"};
+            }
             std::visit([&](auto&& fn) { ex.push(fn); }, *maybe_fn);
+        } else if (auto lhs_box = lhs.as_boxed()) {
+            _dot_boxed(*lhs_box, rhs->string());
         } else {
             assert(false && "Unhandled dot operator case");
+        }
+    }
+    void execute(is::is_list i) {
+        auto& arg = ex.nth(i.arg);
+        if (arg.as_list()) {
+            ex.push(symbol("true"));
+        } else {
+            ex.push(symbol("false"));
+        }
+    }
+
+    void execute(is::raise r) {
+        auto arg = ex.nth(r.arg);
+        let::raise(std::move(arg));
+    }
+
+    void execute(is::apply a) {
+        auto modname = ex.nth(a.mod);
+        auto fn_name = ex.nth(a.fn);
+        auto args = ex.nth(a.arglist);
+        auto modname_sym = modname.as_symbol();
+        if (!modname_sym) {
+            let::raise(tuple::make("einval"_sym, "First argument to apply() must be a symbol"));
+        }
+        auto fn_sym = fn_name.as_symbol();
+        if (!fn_sym) {
+            let::raise(tuple::make("einval"_sym, "Second argument to apply() must be a symbol"));
+        }
+        auto arg_list = args.as_list();
+        if (!arg_list) {
+            let::raise(tuple::make("einval"_sym, "Third argument to apply() must be a list"));
+        }
+        std::vector<let::value> argtup_els{arg_list->begin(), arg_list->end()};
+        auto                    arg_tup = let::tuple(std::move(argtup_els));
+        auto                    mod     = ctx.get_module(modname_sym->string());
+        if (!mod) {
+            let::raise(
+                tuple::make("einval"_sym, "No such module to apply(): " + modname_sym->string()));
+        }
+        auto fn = mod->get_function(fn_sym->string());
+        if (!fn) {
+            let::raise(tuple::make("einval"_sym,
+                                   "No such function '" + fn_sym->string() + "' in module '"
+                                       + modname_sym->string() + "'"));
+        }
+        if (auto fun = std::get_if<let::exec::function>(&*fn)) {
+            ex.push(fun->call_ll(ctx, std::move(arg_tup)));
+        } else {
+            auto clos = std::get_if<let::exec::closure>(&*fn);
+            assert(clos);
+            ex.push_frame(clos->code(), clos->code_begin());
+            for (auto& el : clos->captures()) {
+                ex.push(el);
+            }
+            ex.push(std::move(std::move(arg_tup)));
         }
     }
 
@@ -356,6 +472,11 @@ struct exec_visitor {
         } else {
             throw std::runtime_error{"Attempt to push to non-list"};
         }
+    }
+
+    void _dot_boxed(const let::boxed& b, const std::string& member) {
+        auto val = b.get_member(member);
+        ex.push(std::move(val));
     }
 };
 

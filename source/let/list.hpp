@@ -4,6 +4,7 @@
 #include <memory>
 #include <ostream>
 #include <vector>
+#include <utility>
 
 #include "list_fwd.hpp"
 #include "value.hpp"
@@ -68,6 +69,11 @@ inline let::list::iterator let::list::end() const noexcept { return iterator(nul
 inline let::list let::list::pop_front() const noexcept {
     assert(_head_node != nullptr && "Pop front of empty list");
     return let::list(_head_node->next_node, _size - 1);
+}
+inline std::pair<let::value, let::list> let::list::take_front() const noexcept {
+    assert(_head_node != nullptr && "Take front of empty list");
+    auto front = *begin();
+    return std::make_pair(std::move(front), pop_front());
 }
 inline let::list let::list::push_front(let::value&& val) const noexcept {
     auto new_head

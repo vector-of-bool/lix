@@ -94,8 +94,20 @@ TEST_CASE("Parse a simple literal", "[parser]") {
         {"5 \n# Comment\n", "5"},
         {"5#Comment", "5"},
         {"foo(# Comment\n)", "{:foo, [], []}"},
+        {"'string'", "'string'"},
+        {"'stri\\ng'", "'stri\ng'"},
+        {"\"string\\\"\"", "'string\"'"},
+        {"'''foo'''", "'foo'"},
+        {"'''   foo'''", "'foo'"},
+        {R"(
+            '''
+            foo
+            bar
+            '''
+        )",
+         "'foo\nbar\n'"},
     };
-    for (auto[code, canon] : pairs) {
+    for (auto [code, canon] : pairs) {
         INFO(code);
         try {
             auto node = let::ast::parse(code);

@@ -62,6 +62,26 @@ const let::boxed& unpack_one(const let::tuple& input, tag<let::boxed>) {
 }
 
 template <std::size_t I>
+const let::value& unpack_one(const let::tuple& input, tag<let::value>) {
+    if (input.size() <= I) {
+        throw std::runtime_error{"Not enough arguments to unpack"};
+    }
+    return input[I];
+}
+
+template <std::size_t I, typename T, typename = std::enable_if_t<is_boxable<T>::value>>
+const T& unpack_one(const let::tuple& input, tag<const T>) {
+    const auto& boxed = unpack_one<I>(input, tag<let::boxed>());
+    return box_cast<std::decay_t<T>>(boxed);
+}
+
+template <std::size_t I, typename T, typename = std::enable_if_t<is_boxable<T>::value>>
+T& unpack_one(const let::tuple& input, tag<T>) {
+    const auto& boxed = unpack_one<I>(input, tag<let::boxed>());
+    return mut_box_cast<std::decay_t<T>>(boxed);
+}
+
+template <std::size_t I>
 const let::exec::function& unpack_one(const let::tuple& input, tag<let::exec::function>) {
     auto clos_ptr = input[I].as_function();
     if (!clos_ptr) {
@@ -80,8 +100,7 @@ const let::exec::closure& unpack_one(const let::tuple& input, tag<let::exec::clo
 }
 
 template <typename... Types, std::size_t... Is>
-std::tuple<const Types&...> do_unpack_arg_tuple(const let::value& input,
-                                                std::index_sequence<Is...>) {
+decltype(auto) do_unpack_arg_tuple(const let::value& input, std::index_sequence<Is...>) {
     auto tup_ptr = input.as_tuple();
     if (!tup_ptr) {
         throw std::runtime_error{"Cannot unpack tuple of arguments from non-tuple"};
@@ -92,7 +111,7 @@ std::tuple<const Types&...> do_unpack_arg_tuple(const let::value& input,
 }  // namespace detail
 
 template <typename... Types>
-std::tuple<const Types&...> unpack_arg_tuple(const let::value& input) {
+decltype(auto) unpack_arg_tuple(const let::value& input) {
     return let::detail::do_unpack_arg_tuple<Types...>(input, std::index_sequence_for<Types...>{});
 }
 
@@ -117,6 +136,14 @@ public:
             return nullopt;
         }
     }
+    template <typename T>
+    const T& nth_as_req(std::size_t n) const {
+        auto ref = nth_as<T>(n);
+        if (!ref) {
+            throw std::invalid_argument{"Macro argument " + std::to_string(n) + " is of incorrect type"};
+        }
+        return *ref;
+    }
     opt_ref<const ast::node> keyword_get(const std::string_view& kw) const noexcept;
 };
 
@@ -140,6 +167,31 @@ public:
         return nth(n).as(tag<T>());
     }
     opt_ref<const let::value> keyword_get(const std::string_view& kw) const noexcept;
+
+    template <typename T>
+    const T& nth_as_req(std::size_t n) const {
+        auto ref = nth_as<T>(n);
+        if (!ref) {
+            throw std::invalid_argument{"Argument " + std::to_string(n) + " is of incorrect type"};
+        }
+        return *ref;
+    }
+};
+
+struct keyword_parser {
+private:
+    const let::list& _list;
+
+public:
+    explicit keyword_parser(let::list&& list)       = delete;
+    explicit keyword_parser(const let::list&& list) = delete;
+    explicit keyword_parser(const let::list& list)
+        : _list(list) {}
+    explicit keyword_parser(let::value&& list)       = delete;
+    explicit keyword_parser(const let::value&& list) = delete;
+    explicit keyword_parser(const let::value& list);
+
+    opt_ref<const let::value> get(const std::string_view& kw) const noexcept;
 };
 
 }  // namespace let

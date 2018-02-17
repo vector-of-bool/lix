@@ -6,69 +6,97 @@
 #include <let/exec/kernel.hpp>
 #include <let/list.hpp>
 #include <let/parser/parse.hpp>
+#include <let/refl_get_member.hpp>
 #include <let/symbol.hpp>
 #include <let/tuple.hpp>
 
 #include <catch/catch.hpp>
 
+using namespace let::literals;
+
 struct my_int {
     int value;
+};
+
+struct my_java_int {
+    int _value;
+
+public:
+    int  value() const noexcept { return _value; }
+    void set_value(int i) noexcept { _value = i; }
+    void other_fn(int) {}
 };
 
 using namespace std::string_literals;
 
 LET_TYPEINFO(my_int, value);
-static_assert(let::refl::is_reflected<my_int>::value, "foo");
+LET_TYPEINFO(my_java_int, value, set_value, other_fn);
+static_assert(let::refl::is_reflected<my_int>::value);
+static_assert(let::refl::is_reflected<my_java_int>::value);
 
-// TEST_CASE("Iterate reflected members") {
-//     using info = let::refl::ct_type_info<my_int>;
-//     CHECK(info::name() == "my_int"s);
-//     info::foreach_member([](auto mem) {
-//         CHECK(mem.name == "value"s);
-//         static_assert(std::is_same<typename decltype(mem)::type, int>::value);
-//     });
-// }
+static_assert(!let::is_boxable<std::string>::value);
 
-// TEST_CASE("Qualified type info") {
-//     using info = let::refl::ct_type_info<const my_int>;
-//     CHECK(info::name() == "my_int const");
-// }
+TEST_CASE("Iterate reflected members") {
+    using info = let::refl::ct_type_info<my_int>;
+    CHECK(info::name() == "my_int"s);
+    info::foreach_member([](auto mem) {
+        CHECK(mem.name == "value"s);
+        static_assert(std::is_same<typename decltype(mem)::type, int>::value);
+    });
+}
 
-// TEST_CASE("RTTI") {
-//     using ct_info = let::refl::ct_type_info<my_int>;
-//     auto rt_info  = let::refl::rt_type_info{ct_info{}};
-//     CHECK(rt_info.name() == "my_int"s);
-//     CHECK(rt_info == rt_info);
-//     auto copy = rt_info;
-//     CHECK(copy == rt_info);
+TEST_CASE("Qualified type info") {
+    using info = let::refl::ct_type_info<const my_int>;
+    CHECK(info::name() == "my_int const");
+}
 
-//     auto cv_rt = let::refl::rt_type_info::for_type<const my_int&>();
-//     CHECK(cv_rt.name() == "my_int const&");
-//     CHECK(cv_rt != rt_info);
-//     CHECK(cv_rt.is_const());
-//     CHECK(!cv_rt.is_volatile());
-//     CHECK(cv_rt.is_lref());
-//     CHECK(!cv_rt.is_rref());
-//     CHECK(cv_rt.is_reference());
-// }
+TEST_CASE("RTTI my_int") {
+    using ct_info = let::refl::ct_type_info<my_int>;
+    auto rt_info  = let::refl::rt_type_info{ct_info{}};
+    CHECK(rt_info.name() == "my_int"s);
+    CHECK(rt_info == rt_info);
+    auto copy = rt_info;
+    CHECK(copy == rt_info);
 
-// TEST_CASE("Create boxed from symbol") {
-//     let::boxed b = let::symbol{"ok"};
-//     CHECK(b.type_info() == let::refl::rt_type_info::for_type<let::symbol>());
-//     CHECK_THROWS_AS(let::box_convert<int>(b), let::bad_box_cast);
-//     CHECK(let::box_cast<let::symbol>(b) == "ok");
-// }
+    auto cv_rt = let::refl::rt_type_info::for_type<const my_int&>();
+    CHECK(cv_rt.name() == "my_int const&");
+    CHECK(cv_rt != rt_info);
+    CHECK(cv_rt.is_const());
+    CHECK(!cv_rt.is_volatile());
+    CHECK(cv_rt.is_lref());
+    CHECK(!cv_rt.is_rref());
+    CHECK(cv_rt.is_reference());
 
-// TEST_CASE("Box conversions") {
-//     let::boxed b = let::integer{12};
-//     CHECK(let::box_convert<int>(b) == 12);
-// }
+    auto mem_info = rt_info.get_member_info("not_a_member");
+    CHECK_FALSE(mem_info);
 
-// TEST_CASE("Create tuple") {
-//     auto tup = let::tuple::make("foo"s, let::integer(12));
-//     CHECK(tup.size() == 2);
-//     CHECK(let::box_cast<std::string>(tup[0]) == "foo");
-// }
+    mem_info = rt_info.get_member_info("value");
+    REQUIRE(mem_info);
+    CHECK(mem_info->is_gettable());
+
+    // let::value v = my_int{};
+}
+
+TEST_CASE("RTTI my_java_int") {
+    auto rt_info = let::refl::rt_type_info::for_type<my_java_int>();
+    CHECK(rt_info.name() == "my_java_int");
+    auto getter_info = rt_info.get_member_info("value");
+    REQUIRE(getter_info);
+    CHECK(getter_info->is_gettable());
+    auto setter_info = rt_info.get_member_info("set_value");
+    REQUIRE(setter_info);
+    CHECK_FALSE(setter_info->is_gettable());
+
+    my_java_int inst;
+    inst.set_value(3);
+    CHECK(inst.value() == 3);
+    CHECK(getter_info->get(inst) == 3);
+}
+
+TEST_CASE("Pass reference") {
+    my_int i{42};
+    auto   boxed_ref = let::boxed(std::ref(i));
+}
 
 TEST_CASE("Simple eval") {
     auto val = let::eval("2 + 5");
@@ -236,6 +264,45 @@ TEST_CASE("case clauses 2") {
     REQUIRE_NOTHROW(let::eval(ast));
 }
 
+TEST_CASE("case clauses 3") {
+    auto code = R"(
+        tup = {:foo, :bar}
+        case tup do
+            # Can only match if both elements are the same:
+            {key, key} -> raise "Wrong"
+            # Matches any 2-tuple
+            {key1, key2} -> :ok
+        end
+    )";
+    auto ast  = let::ast::parse(code);
+    CHECK_NOTHROW(let::compile(ast));
+    auto block = let::compile(ast);
+    INFO(block);
+    REQUIRE_NOTHROW(let::eval(ast));
+}
+
+TEST_CASE("case clauses 4") {
+    auto code = R"(
+        tup = {:foo, :bar}
+        case tup do
+            nil -> raise :never
+            {:foo, other} -> nil
+        end
+        # Check that the compiler unwinds the case clause properly
+        raise 1
+    )";
+    auto ast  = let::ast::parse(code);
+    CHECK_NOTHROW(let::compile(ast));
+    auto block = let::compile(ast);
+    INFO(block);
+    try {
+        let::eval(code);
+        CHECK(false);
+    } catch (const let::raised_exception& e) {
+        CHECK(e.value() == 1);
+    }
+}
+
 TEST_CASE("Register a module") {
     auto code = R"(
         modname = MyModule
@@ -400,6 +467,35 @@ TEST_CASE("defmodule") {
     CHECK(let::eval("MyModule.is_cat_sound('woof')", ctx) == false_sym);
 }
 
+TEST_CASE("Alias 1") {
+    auto code = R"(
+        defmodule MyModule.Foo do
+            def bar(val) do
+                val + 42
+            end
+        end
+
+        defmodule OtherMod do
+            def test_alias(v) do
+                alias MyModule.Foo
+                Foo.bar(v)
+            end
+        end
+
+        ## TODO:
+        ## defmodule OtherMod2 do
+        ##     alias MyModule.Foo
+        ##     def test_alias(v) do
+        ##         Foo.bar(v)
+        ##     end
+        ## end
+    )";
+    auto ctx  = let::exec::build_kernel_context();
+    REQUIRE_NOTHROW(let::eval(code, ctx));
+    CHECK(let::eval("OtherMod.test_alias(4)", ctx) == 46);
+    // CHECK(let::eval("OtherMod2.test_alias(4)", ctx) == 46);
+}
+
 TEST_CASE("Cons 1") {
     auto code = R"(
         list = [:cat, :dog, :bird, :person]
@@ -423,4 +519,66 @@ TEST_CASE("Cons 2") {
     auto block = let::compile(ast);
     INFO(block);
     CHECK_NOTHROW(let::eval(ast));
+}
+
+TEST_CASE("Raise 1") {
+    auto code = R"(
+        raise 5
+    )";
+    try {
+        let::eval(code);
+        CHECK(false);
+    } catch (const let::raised_exception& e) {
+        CHECK(e.value() == 5);
+    }
+}
+
+TEST_CASE("Raise 2") {
+    auto code = R"(
+        case 5 do
+            1 -> nil
+        end
+    )";
+    try {
+        let::eval(code);
+        CHECK(false);
+    } catch (const let::raised_exception& e) {
+        CHECK(e.value() == let::tuple::make(let::symbol("nomatch"), 5));
+    }
+}
+
+TEST_CASE("Raise badarg") {
+    auto code = R"(
+        defmodule Dummy do
+            def foo do
+                nil
+            end
+        end
+
+        Dummy.foo(5, 7)
+    )";
+    try {
+        let::eval(code);
+        CHECK(false);
+    } catch (const let::raised_exception& e) {
+        CHECK(e.value()
+              == let::tuple::make(let::symbol("badarg"), "Dummy.foo", let::tuple::make(5, 7)));
+    }
+}
+
+TEST_CASE("Pipe") {
+    auto code = R"(
+        defmodule Dummy do
+            def foo do
+                :cats
+            end
+
+            def bar(:cats) do
+                :meow
+            end
+        end
+
+        :meow = Dummy.foo |> Dummy.bar
+    )";
+    CHECK_NOTHROW(let::eval(code));
 }

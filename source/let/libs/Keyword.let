@@ -1,0 +1,21 @@
+defmodule Keyword do
+  def get(kws, key), do: get(kws, key, nil)
+  def get([{key, value}|_tail], key, default) do
+    value
+  end
+  def get([_bad|tail], key, default) do
+    get(tail, key, default)
+  end
+  def get([], _key, default), do: default
+
+  def fetch([{key, value}|_tail], key), do: {:ok, value}
+  def fetch([_bad|tail], key), do: fetch(tail, key)
+  def fetch([], key), do: :error
+
+  def fetch!(kws, key) do
+    case fetch(kws, key) do
+      {:ok, val} -> val
+      :error -> raise {KeyError, key}
+    end
+  end
+end
