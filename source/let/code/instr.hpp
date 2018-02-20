@@ -140,6 +140,9 @@ struct raise {
 struct no_clause {
     slot_ref_t unmatched;
 };
+struct frame_id {
+    std::string id;
+};
 struct debug {};
 
 using any_var = std::variant<ret,
@@ -176,7 +179,8 @@ using any_var = std::variant<ret,
                              raise,
                              mk_closure,
                              mk_cons,
-                             push_front>;
+                             push_front,
+                             frame_id>;
 
 }  // namespace is_types
 

@@ -15,6 +15,7 @@ class exec_frame {
     code::iterator _current_instr = _first_instr;
     code::iterator _end_instr     = _code.end();
     stack          _stack;
+    std::string    _ident;
 
 public:
     explicit exec_frame(code::code c)
@@ -55,6 +56,9 @@ public:
         dest = std::move(el);
     }
 
+    void               set_ident(const std::string& name) { _ident = name; }
+    const std::string& ident() const { return _ident; }
+
     void rewind(slot_ref_t new_top) { _stack.rewind(new_top); }
 
     const code::code& code() const { return _code; }
@@ -62,25 +66,25 @@ public:
 
 class executor_impl {
 public:
-    std::stack<exec_frame>    _call_frames;
+    std::deque<exec_frame>    _call_frames;
     bool                      _test_state = false;
     std::optional<let::value> _bottom_ret;
 
     exec_frame& _top_frame() {
         assert(!_call_frames.empty());
-        return _call_frames.top();
+        return _call_frames.back();
     }
 
     const exec_frame& _top_frame() const {
         assert(!_call_frames.empty());
-        return _call_frames.top();
+        return _call_frames.back();
     }
 
     const let::value& nth(slot_ref_t n) const { return _top_frame().nth(n); }
 
     void pop_frame_return(slot_ref_t r) {
         auto rv = _top_frame().nth(r);
-        _call_frames.pop();
+        _call_frames.pop_back();
         if (_call_frames.empty()) {
             _bottom_ret.emplace(std::move(rv));
         } else {
@@ -88,7 +92,7 @@ public:
         }
     }
 
-    void push_frame(code::code c, code::iterator inst) { _call_frames.emplace(c, inst); }
+    void push_frame(code::code c, code::iterator inst) { _call_frames.emplace_back(c, inst); }
 
     void push(value&& el) { _top_frame().push(std::move(el)); }
     void push(const value& el) { _top_frame().push(el); }
@@ -384,7 +388,12 @@ struct exec_visitor {
     void execute(is::no_clause n) {
         auto val = ex.nth(n.unmatched);
         auto tup = let::tuple::make(let::symbol("nomatch"), val);
-        let::raise(tup);
+        // Build up the traceback
+        std::vector<std::string> traceback;
+        for (auto& fr : ex._call_frames) {
+            traceback.push_back(fr.ident());
+    }
+        let::raise(std::move(tup), std::move(traceback));
     }
     void execute(is::dot d) {
         auto& lhs = ex.nth(d.object);
@@ -419,7 +428,12 @@ struct exec_visitor {
 
     void execute(is::raise r) {
         auto arg = ex.nth(r.arg);
-        let::raise(std::move(arg));
+        // Build up the traceback
+        std::vector<std::string> traceback;
+        for (auto& fr : ex._call_frames) {
+            traceback.push_back(fr.ident());
+        }
+        let::raise(std::move(arg), std::move(traceback));
     }
 
     void execute(is::apply a) {
@@ -473,6 +487,8 @@ struct exec_visitor {
             throw std::runtime_error{"Attempt to push to non-list"};
         }
     }
+
+    void execute(const is::frame_id& id) { ex._top_frame().set_ident(id.id); }
 
     void _dot_boxed(const let::boxed& b, const std::string& member) {
         auto val = b.get_member(member);

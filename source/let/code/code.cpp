@@ -107,6 +107,7 @@ struct code_ostream_visitor {
     void operator()(is::raise r) { o << std::setw(13) << "raise  " << r.arg; }
     void operator()(is::false_jump j) { o << std::setw(13) << "false_jump  " << j.target; }
     void operator()(is::rewind r) { o << std::setw(13) << "rewind  " << r.slot; }
+    void operator()(const is::frame_id& id) { o << std::setw(13) << "frame_id  " << id.id; }
     void operator()(is::apply a) {
         o << std::setw(13) << "apply  " << a.mod << ", " << a.fn << ", " << a.arglist;
     }

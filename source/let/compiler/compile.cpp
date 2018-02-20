@@ -576,6 +576,13 @@ struct block_compiler {
         // Save the stack top. The fn will run with a clean stack
         // The first instruction in the fn code:
         const auto code_begin = current_instruction();
+        // Start by identifying the frame
+        if (auto fn_meta = meta.fn_details()) {
+            auto frame_id = fn_meta->first + "." + fn_meta->second;
+            builder.push_instr(is::frame_id{std::move(frame_id)});
+        } else {
+            builder.push_instr(is::frame_id{"<anonymous-function>"});
+        }
         // Compile the fn body:
         auto ret_slot = _compile_anon_fn_inner(args, meta);
         // Generate the final return instruction:
