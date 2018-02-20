@@ -22,6 +22,19 @@ defmodule Enum do
   def each(seq, cb),
     do: reduce(seq, :ok, fn el, :ok -> cb.(el); :ok end)
 
+  def find(seq, cb), do: find(seq, cb, nil)
+  def find(seq, cb, default) do
+    reduce(seq, default, fn
+      item, default ->
+        cond do
+          cb.(item) ->
+            item
+          true -> default
+        end
+      _item, other -> other
+    end)
+  end
+
   def filter(seq, cb) do
     els = reduce(seq, [], fn
       el, acc ->
