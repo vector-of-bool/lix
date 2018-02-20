@@ -28,6 +28,10 @@ struct sub {
     slot_ref_t a;
     slot_ref_t b;
 };
+struct mul {
+    slot_ref_t a;
+    slot_ref_t b;
+};
 struct eq {
     slot_ref_t a;
     slot_ref_t b;
@@ -160,6 +164,7 @@ using any_var = std::variant<ret,
                              call_mfa,
                              add,
                              sub,
+                             mul,
                              eq,
                              neq,
                              const_int,

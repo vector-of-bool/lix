@@ -40,6 +40,7 @@ struct code_ostream_visitor {
     }
     void operator()(is::add a) { o << std::setw(13) << "add  " << a.a << ", " << a.b; }
     void operator()(is::sub s) { o << std::setw(13) << "sub  " << s.a << ", " << s.b; }
+    void operator()(is::mul m) { o << std::setw(13) << "mul  " << m.a << ", " << m.b; }
     void operator()(is::mk_cons c) { o << std::setw(13) << "mk_cons  " << c.lhs << ", " << c.rhs; }
     void operator()(is::push_front c) {
         o << std::setw(13) << "push_front  " << c.elem << ", " << c.list;

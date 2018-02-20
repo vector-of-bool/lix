@@ -208,9 +208,22 @@ struct exec_visitor {
             }
             ex.push(*l_str + *r_str);
         } else {
-            throw std::runtime_error{"Invalid operands to binary operator '+'"};
+
+    void execute(is::mul mul) {
+        auto& lhs = ex.nth(mul.a);
+        auto& rhs = ex.nth(mul.b);
+        if (auto l_int = lhs.as_integer()) {
+            auto r_int = rhs.as_integer();
+            if (!r_int) {
+                let::raise(
+                    let::tuple::make("einval"_sym, "multiply"_sym, let::tuple::make(lhs, rhs)));
+            }
+            ex.push(*l_int * *r_int);
+        } else {
+            let::raise(let::tuple::make("einval"_sym, "multiply"_sym, let::tuple::make(lhs, rhs)));
         }
     }
+
     void execute(is::sub sub) {
         auto lhs = ex.nth(sub.a).as_integer();
         auto rhs = ex.nth(sub.b).as_integer();

@@ -306,6 +306,12 @@ struct block_compiler {
                 auto rhs_slot = compile(args.nodes[1]);
                 builder.push_instr(is::sub{lhs_slot, rhs_slot});
                 return consume_slot();
+            } else if (lhs_str == "*") {
+                _check_binary(args);
+                auto lhs_slot = compile(args.nodes[0]);
+                auto rhs_slot = compile(args.nodes[1]);
+                builder.push_instr(is::mul{lhs_slot, rhs_slot});
+                return consume_slot();
             } else if (lhs_str == "=") {
                 _check_binary(args);
                 return _compile_assign(args.nodes);
