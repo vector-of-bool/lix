@@ -16,7 +16,7 @@ let::exec::module build_path_basemod() {
         if (in_path.is_absolute()) {
             return in_path.string();
         } else {
-            return fs::absolute(in_path / base).string();
+            return (base / in_path).string();
         }
     });
     mod.add_function("basename", [&](auto&, const auto& tup) {
