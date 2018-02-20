@@ -131,9 +131,17 @@ struct exec_visitor {
     }
 
     template <typename... Args>
-    void _raise_tuple(Args&&... args) {
+    void _raise_tuple(Args&&... args) const {
         auto tup = let::tuple::make(std::forward<Args>(args)...);
         let::raise(tup, _make_traceback());
+    }
+
+    let::value _call_ll(const let::exec::function& fn, const let::value& argument) const {
+        try {
+            return fn.call_ll(ctx, argument);
+        } catch (const std::runtime_error& e) {
+            _raise_tuple("RuntimeError"_sym, e.what());
+        }
     }
 
     void execute(is::const_int i) { ex.push(i.value); }
@@ -155,7 +163,7 @@ struct exec_visitor {
             }
             ex.push(std::move(arg));
         } else if (auto fn = callee.as_function()) {
-            ex.push(fn->call_ll(ctx, ex.nth(c.arg)));
+            ex.push(_call_ll(*fn, ex.nth(c.arg)));
         } else {
             assert(false && "Call to non-function");
             std::terminate();
@@ -183,7 +191,7 @@ struct exec_visitor {
             }
             ex.push(std::move(tup));
         } else if (auto native_fn = std::get_if<let::exec::function>(&*fun)) {
-            ex.push(native_fn->call_ll(ctx, tup));
+            ex.push(_call_ll(*native_fn, tup));
         } else {
             assert(false && "Unreachable");
             std::terminate();
@@ -517,7 +525,7 @@ struct exec_visitor {
                                        + modname_sym->string() + "'"));
         }
         if (auto fun = std::get_if<let::exec::function>(&*fn)) {
-            ex.push(fun->call_ll(ctx, std::move(arg_tup)));
+            ex.push(_call_ll(*fun, arg_tup));
         } else {
             auto clos = std::get_if<let::exec::closure>(&*fn);
             assert(clos);
