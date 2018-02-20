@@ -602,8 +602,9 @@ struct block_compiler {
         auto call = n.as_call();
         assert(call);
         auto arrow = call->target().as_symbol();
-        assert(arrow);
-        assert(arrow->string() == "->");
+        if (!arrow || arrow->string() != "->") {
+            throw std::runtime_error{"Invalid clause. Must have an l2r arrow"};
+        }
         auto args = call->arguments().as_list();
         assert(args);
         assert(args->nodes.size() == 2);
@@ -795,8 +796,9 @@ struct block_compiler {
         assert(pair && "Expected keyword pair for quote");
         assert(pair->nodes.size() == 2 && "Invalid kw pair");
         auto kw_do = pair->nodes[0].as_symbol();
-        assert(kw_do && "Expected symbol");
-        assert(kw_do->string() == "do");
+        if (!kw_do || kw_do->string() != "do") {
+            throw std::runtime_error{"Invalid argument to 'quote'"};
+        }
         auto& rhs = pair->nodes[1];
         return _compile_quoted(rhs);
     }
