@@ -7,7 +7,7 @@ namespace let::exec::detail {
 
 class context_impl {
 public:
-    std::map<std::string, module>                  _modules;
+    std::map<std::string, module, std::less<>>     _modules;
     std::vector<std::map<std::string, let::value>> _environments;
 
     friend struct inst_evaluator;
@@ -34,7 +34,7 @@ void context::register_module(const std::string& name, let::exec::module mod) {
     _impl->register_module(name, mod);
 }
 
-std::optional<let::exec::module> context::get_module(const std::string& name) const {
+std::optional<let::exec::module> context::get_module(const std::string_view& name) const {
     auto mod_iter = _impl->_modules.find(name);
     if (mod_iter == _impl->_modules.end()) {
         return std::nullopt;

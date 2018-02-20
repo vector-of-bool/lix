@@ -43,8 +43,8 @@ public:
         _add_macro(name, let::macro_function(std::forward<Func>(fn)));
     }
 
-    std::optional<std::variant<function, closure>> get_function(const std::string& name) const;
-    macro_function*                                get_macro(const std::string& name) const;
+    std::optional<std::variant<function, closure>> get_function(const std::string_view& name) const;
+    opt_ref<macro_function>                        get_macro(const std::string_view& name) const;
 
     std::optional<let::value> get_attribute(const std::string& name);
     void                      set_attribute(const std::string& name, const let::value&);

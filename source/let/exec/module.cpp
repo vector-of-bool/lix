@@ -8,8 +8,8 @@ using namespace let::exec;
 namespace let::exec::detail {
 
 struct module_impl {
-    std::map<std::string, std::variant<function, closure>> functions;
-    std::map<std::string, macro_function>                  macros;
+    std::map<std::string, std::variant<function, closure>, std::less<>> functions;
+    std::map<std::string, macro_function, std::less<>>                  macros;
 };
 
 }  // namespace let::exec::detail
@@ -31,7 +31,8 @@ void module::_add_macro(const std::string& name, let::macro_function&& fn) {
     _impl->macros.emplace(name, std::move(fn));
 }
 
-std::optional<std::variant<function, closure>> module::get_function(const std::string& name) const {
+std::optional<std::variant<function, closure>>
+module::get_function(const std::string_view& name) const {
     auto iter = _impl->functions.find(name);
     if (iter == end((_impl->functions))) {
         return std::nullopt;
@@ -40,11 +41,11 @@ std::optional<std::variant<function, closure>> module::get_function(const std::s
     }
 }
 
-macro_function* module::get_macro(const std::string& name) const {
+let::opt_ref<macro_function> module::get_macro(const std::string_view& name) const {
     auto iter = _impl->macros.find(name);
     if (iter == _impl->macros.end()) {
-        return nullptr;
+        return std::nullopt;
     } else {
-        return &iter->second;
+        return iter->second;
     }
 }

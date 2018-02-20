@@ -144,6 +144,32 @@ struct exec_visitor {
             ex.push(fn->call_ll(ctx, ex.nth(c.arg)));
         } else {
             assert(false && "Call to non-function");
+            std::terminate();
+        }
+    }
+
+    void execute(is::call_mfa c) {
+        auto& arg = ex.nth(c.arg);
+        auto  mod      = ctx.get_module(c.module.string());
+        if (!mod) {
+            let::raise(let::tuple::make("undefined"_sym, let::tuple::make("module"_sym, c.module)));
+        }
+        auto fun = mod->get_function(c.fn.string());
+        if (!fun) {
+            let::raise(let::tuple::make("undefined"_sym,
+                                        let::tuple::make("function"_sym, c.module, c.fn)));
+        }
+        if (auto closure = std::get_if<let::exec::closure>(&*fun)) {
+            ex.push_frame(closure->code(), closure->code_begin());
+            for (auto& el : closure->captures()) {
+                ex.push(el);
+            }
+            ex.push(arg);
+        } else if (auto native_fn = std::get_if<let::exec::function>(&*fun)) {
+            ex.push(native_fn->call_ll(ctx, arg));
+        } else {
+            assert(false && "Unreachable");
+            std::terminate();
         }
     }
 
@@ -255,7 +281,7 @@ struct exec_visitor {
     bool _match(const let::value& lhs, const let::value& rhs) {
         if (auto bind_slot = lhs.as_binding_slot()) {
             // We're a binding. Fill in the variable slot.
-            auto lhs_slot = bind_slot->slot;
+            auto  lhs_slot  = bind_slot->slot;
             auto& lhs_value = ex.nth(lhs_slot);
             if (lhs_value.as_binding_slot()) {
                 // Unbound slot
@@ -266,21 +292,21 @@ struct exec_visitor {
                 // current value
                 return lhs_value == rhs;
             }
-        // } else if (auto rhs_bind_slot = rhs.as_binding_slot()) {
-        //     // Whoa! Right-hand can also be a binding slot in cases where we
-        //     // have a bind (=) within a binding context, such as the head of a
-        //     // function or case clause
-        //     // In this case, we bind backward and put the left into the right
-        //     auto rhs_slot = rhs_bind_slot->slot;
-        //     auto& rhs_value = ex.nth(rhs_slot);
-        //     if (rhs_value.as_binding_slot()) {
-        //         // Right-hand is unbound
-        //         ex._top_frame().bind_slot(rhs_slot, lhs);
-        //         return true;
-        //     } else {
-        //         // Check that the two are equivalent
-        //         return lhs == rhs_value;
-        //     }
+            // } else if (auto rhs_bind_slot = rhs.as_binding_slot()) {
+            //     // Whoa! Right-hand can also be a binding slot in cases where we
+            //     // have a bind (=) within a binding context, such as the head of a
+            //     // function or case clause
+            //     // In this case, we bind backward and put the left into the right
+            //     auto rhs_slot = rhs_bind_slot->slot;
+            //     auto& rhs_value = ex.nth(rhs_slot);
+            //     if (rhs_value.as_binding_slot()) {
+            //         // Right-hand is unbound
+            //         ex._top_frame().bind_slot(rhs_slot, lhs);
+            //         return true;
+            //     } else {
+            //         // Check that the two are equivalent
+            //         return lhs == rhs_value;
+            //     }
         } else if (auto lhs_tup = lhs.as_tuple()) {
             // We're a tuple match
             auto rhs_tup = rhs.as_tuple();
@@ -392,7 +418,7 @@ struct exec_visitor {
         std::vector<std::string> traceback;
         for (auto& fr : ex._call_frames) {
             traceback.push_back(fr.ident());
-    }
+        }
         let::raise(std::move(tup), std::move(traceback));
     }
     void execute(is::dot d) {
@@ -437,9 +463,9 @@ struct exec_visitor {
     }
 
     void execute(is::apply a) {
-        auto modname = ex.nth(a.mod);
-        auto fn_name = ex.nth(a.fn);
-        auto args = ex.nth(a.arglist);
+        auto modname     = ex.nth(a.mod);
+        auto fn_name     = ex.nth(a.fn);
+        auto args        = ex.nth(a.arglist);
         auto modname_sym = modname.as_symbol();
         if (!modname_sym) {
             let::raise(tuple::make("einval"_sym, "First argument to apply() must be a symbol"));

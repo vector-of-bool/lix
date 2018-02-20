@@ -35,6 +35,9 @@ struct code_ostream_visitor {
 
     void operator()(is::ret r) { o << std::setw(13) << "ret  " << r.slot; }
     void operator()(is::call c) { o << std::setw(13) << "call  " << c.fn << ", " << c.arg; }
+    void operator()(is::call_mfa c) {
+        o << std::setw(13) << "call_mfa  " << c.module.string() << "." << c.fn.string() << "(" << c.arg << ")";
+    }
     void operator()(is::add a) { o << std::setw(13) << "add  " << a.a << ", " << a.b; }
     void operator()(is::sub s) { o << std::setw(13) << "sub  " << s.a << ", " << s.b; }
     void operator()(is::mk_cons c) { o << std::setw(13) << "mk_cons  " << c.lhs << ", " << c.rhs; }
@@ -99,6 +102,9 @@ struct code_ostream_visitor {
     }
     void operator()(const is::mk_closure& clos) {
         o << std::setw(13) << "mk_closure  " << clos.code_begin << " -> " << clos.code_end;
+        for (auto& slot : clos.captures) {
+            o << ", " << slot;
+        }
     }
 
     void operator()(is::jump j) { o << std::setw(13) << "jump  " << j.target; }

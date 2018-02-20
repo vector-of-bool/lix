@@ -143,10 +143,16 @@ struct no_clause {
 struct frame_id {
     std::string id;
 };
+struct call_mfa {
+    let::symbol module;
+    let::symbol fn;
+    slot_ref_t  arg;
+};
 struct debug {};
 
 using any_var = std::variant<ret,
                              call,
+                             call_mfa,
                              add,
                              sub,
                              eq,

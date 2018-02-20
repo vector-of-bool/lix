@@ -38,7 +38,7 @@ public:
     context(context&&);
     context& operator=(context&&);
 
-    std::optional<module> get_module(const std::string& name) const;
+    std::optional<module> get_module(const std::string_view& name) const;
 
     void                      set_environment_value(const std::string&, let::value);
     std::optional<let::value> get_environment_value(const std::string& name) const;
