@@ -455,6 +455,7 @@ struct block_compiler {
             throw std::runtime_error{
                 "Bindings `=` are not allowed within function or `case` clause heads"};
         }
+        auto rhs_slot = compile(args[1]);
         auto left_var_name = get_var_string(args[0]);
         if (left_var_name) {
             auto var_slot = slot_for_variable(*left_var_name);
@@ -462,7 +463,6 @@ struct block_compiler {
                 // We're a plain variable assignment. We can optimize out
                 // doing bind matching and just alias the variable slot to the
                 // slot of our right-hand side
-                auto rhs_slot = compile(args[1]);
                 top_varmap().emplace(*left_var_name, rhs_slot);
                 return rhs_slot;
             }
@@ -472,7 +472,6 @@ struct block_compiler {
         binding_expr_depth++;
         auto lhs_slot = compile(args[0]);
         binding_expr_depth--;
-        auto rhs_slot = compile(args[1]);
         builder.push_instr(is::hard_match{lhs_slot, rhs_slot});
         return rhs_slot;
     }
