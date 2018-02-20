@@ -559,6 +559,7 @@ struct lit_tuple_tail : sor<
                             seq<
                                 // We might have an embeded keyword list:
                                 opt<keyword_list_args<list_tail<keyword_arg, one<','>, space>>>,
+                                ws,
                                 // Then the tuple close:
                                 one<'}'>>> {};
 SET_ERROR_MESSAGE(lit_tuple_tail, "Expected tuple element, keyword list, or closing \"}\"");
