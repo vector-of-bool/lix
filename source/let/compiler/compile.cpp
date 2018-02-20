@@ -345,6 +345,13 @@ struct block_compiler {
                 auto rhs_slot = compile(args.nodes[0]);
                 builder.push_instr(is::is_list{rhs_slot});
                 return consume_slot();
+            } else if (lhs_str == "to_string") {
+                if (args.nodes.size() != 1) {
+                    throw std::runtime_error{"Invalid arguments for to_string()"};
+                }
+                auto rhs_slot = compile(args.nodes[0]);
+                builder.push_instr(is::to_string{rhs_slot});
+                return consume_slot();
             } else if (lhs_str == "raise") {
                 if (args.nodes.size() != 1) {
                     throw std::runtime_error{"'raise' expects one argument"};

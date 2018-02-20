@@ -126,17 +126,6 @@ struct dot {
     slot_ref_t object;
     slot_ref_t attr_name;
 };
-struct is_list {
-    slot_ref_t arg;
-};
-struct apply {
-    slot_ref_t mod;
-    slot_ref_t fn;
-    slot_ref_t arglist;
-};
-struct raise {
-    slot_ref_t arg;
-};
 struct no_clause {
     slot_ref_t unmatched;
 };
@@ -149,6 +138,22 @@ struct call_mfa {
     slot_ref_t  arg;
 };
 struct debug {};
+// Intrinsic functions:
+struct is_list {
+    slot_ref_t arg;
+};
+struct to_string {
+    slot_ref_t arg;
+};
+struct apply {
+    slot_ref_t mod;
+    slot_ref_t fn;
+    slot_ref_t arglist;
+};
+struct raise {
+    slot_ref_t arg;
+};
+
 
 using any_var = std::variant<ret,
                              call,
@@ -181,6 +186,7 @@ using any_var = std::variant<ret,
                              no_clause,
                              dot,
                              is_list,
+                             to_string,
                              apply,
                              raise,
                              mk_closure,

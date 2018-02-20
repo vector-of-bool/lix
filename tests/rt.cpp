@@ -582,3 +582,11 @@ TEST_CASE("Pipe") {
     )";
     CHECK_NOTHROW(let::eval(code));
 }
+
+TEST_CASE("to_string") {
+    auto code = R"(
+        "foo" = to_string("foo")
+        "foo" = to_string(:foo)
+    )";
+    CHECK_NOTHROW(let::eval(code));
+}

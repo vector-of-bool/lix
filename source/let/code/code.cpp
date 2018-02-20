@@ -110,6 +110,7 @@ struct code_ostream_visitor {
     void operator()(is::jump j) { o << std::setw(13) << "jump  " << j.target; }
     void operator()(is::test_true t) { o << std::setw(13) << "test_true  " << t.slot; }
     void operator()(is::is_list i) { o << std::setw(13) << "is_list  " << i.arg; }
+    void operator()(is::to_string i) { o << std::setw(13) << "to_string  " << i.arg; }
     void operator()(is::raise r) { o << std::setw(13) << "raise  " << r.arg; }
     void operator()(is::false_jump j) { o << std::setw(13) << "false_jump  " << j.target; }
     void operator()(is::rewind r) { o << std::setw(13) << "rewind  " << r.slot; }

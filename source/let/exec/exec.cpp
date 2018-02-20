@@ -150,7 +150,7 @@ struct exec_visitor {
 
     void execute(is::call_mfa c) {
         auto& arg = ex.nth(c.arg);
-        auto  mod      = ctx.get_module(c.module.string());
+        auto  mod = ctx.get_module(c.module.string());
         if (!mod) {
             let::raise(let::tuple::make("undefined"_sym, let::tuple::make("module"_sym, c.module)));
         }
@@ -414,12 +414,7 @@ struct exec_visitor {
     void execute(is::no_clause n) {
         auto val = ex.nth(n.unmatched);
         auto tup = let::tuple::make(let::symbol("nomatch"), val);
-        // Build up the traceback
-        std::vector<std::string> traceback;
-        for (auto& fr : ex._call_frames) {
-            traceback.push_back(fr.ident());
-        }
-        let::raise(std::move(tup), std::move(traceback));
+        let::raise(std::move(tup), _make_traceback());
     }
     void execute(is::dot d) {
         auto& lhs = ex.nth(d.object);
@@ -446,20 +441,35 @@ struct exec_visitor {
     void execute(is::is_list i) {
         auto& arg = ex.nth(i.arg);
         if (arg.as_list()) {
-            ex.push(symbol("true"));
+            ex.push("true"_sym);
         } else {
-            ex.push(symbol("false"));
+            ex.push("false"_sym);
+        }
+    }
+    void execute(is::to_string t) {
+        auto& arg = ex.nth(t.arg);
+        if (auto sym = arg.as_symbol()) {
+            ex.push(sym->string());
+        } else if (auto int_ = arg.as_integer()) {
+            ex.push(std::to_string(*int_));
+        } else if (auto str = arg.as_string()) {
+            ex.push(*str);
+        } else {
+            let::raise(let::tuple::make("einval", "to_string"_sym, arg), _make_traceback());
         }
     }
 
-    void execute(is::raise r) {
-        auto arg = ex.nth(r.arg);
-        // Build up the traceback
+    std::vector<std::string> _make_traceback() const {
         std::vector<std::string> traceback;
         for (auto& fr : ex._call_frames) {
             traceback.push_back(fr.ident());
         }
-        let::raise(std::move(arg), std::move(traceback));
+        return traceback;
+    }
+
+    void execute(is::raise r) {
+        auto arg = ex.nth(r.arg);
+        let::raise(std::move(arg), std::move(_make_traceback()));
     }
 
     void execute(is::apply a) {
