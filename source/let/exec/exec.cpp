@@ -122,6 +122,20 @@ struct exec_visitor {
     let::exec::context&               ctx;
     let::exec::detail::executor_impl& ex;
 
+    std::vector<std::string> _make_traceback() const {
+        std::vector<std::string> traceback;
+        for (auto& fr : ex._call_frames) {
+            traceback.push_back(fr.ident());
+        }
+        return traceback;
+    }
+
+    template <typename... Args>
+    void _raise_tuple(Args&&... args) {
+        auto tup = let::tuple::make(std::forward<Args>(args)...);
+        let::raise(tup, _make_traceback());
+    }
+
     void execute(is::const_int i) { ex.push(i.value); }
     void execute(is::const_double d) { ex.push(d.value); }
     void execute(is::const_symbol sym) { ex.push(let::symbol{sym.sym}); }
@@ -152,12 +166,11 @@ struct exec_visitor {
         auto& arg = ex.nth(c.arg);
         auto  mod = ctx.get_module(c.module.string());
         if (!mod) {
-            let::raise(let::tuple::make("undefined"_sym, let::tuple::make("module"_sym, c.module)));
+            _raise_tuple("undefined"_sym, c.module);
         }
         auto fun = mod->get_function(c.fn.string());
         if (!fun) {
-            let::raise(let::tuple::make("undefined"_sym,
-                                        let::tuple::make("function"_sym, c.module, c.fn)));
+            _raise_tuple("undefined"_sym, c.module, c.fn);
         }
         if (auto closure = std::get_if<let::exec::closure>(&*fun)) {
             ex.push_frame(closure->code(), closure->code_begin());
@@ -194,20 +207,19 @@ struct exec_visitor {
         if (auto l_int = lhs.as_integer()) {
             auto r_int = rhs.as_integer();
             if (!r_int) {
-                throw std::runtime_error{
-                    "Invalid operands to binary operator '+' (Expected right-hand side to be an "
-                    "integer)"};
+                _raise_tuple("einval"_sym, "+"_sym, lhs, rhs);
             }
             ex.push(*l_int + *r_int);
         } else if (auto l_str = lhs.as_string()) {
             auto r_str = rhs.as_string();
             if (!r_str) {
-                throw std::runtime_error{
-                    "Invalid operands to binary operator '+' (Expected right-hand side to be an "
-                    "string)"};
+                _raise_tuple("einval"_sym, "+"_sym, lhs, rhs);
             }
             ex.push(*l_str + *r_str);
         } else {
+            _raise_tuple("einval"_sym, "+"_sym, lhs, rhs);
+        }
+    }
 
     void execute(is::mul mul) {
         auto& lhs = ex.nth(mul.a);
@@ -353,9 +365,7 @@ struct exec_visitor {
         auto& rhs       = ex.nth(mat.rhs);
         auto  did_match = _match(lhs, rhs);
         if (!did_match) {
-            // TODO: Throw, not assert
-            throw std::runtime_error{"Failed to match left-hand value " + to_string(lhs)
-                                     + " with right-hand of " + to_string(rhs)};
+            _raise_tuple("badmatch"_sym, lhs, rhs);
         }
     }
     void execute(is::try_match mat) {
@@ -424,11 +434,7 @@ struct exec_visitor {
         auto& rhs = ex.nth(c.rhs);
         ex.push(cons{lhs, rhs});
     }
-    void execute(is::no_clause n) {
-        auto val = ex.nth(n.unmatched);
-        auto tup = let::tuple::make(let::symbol("nomatch"), val);
-        let::raise(std::move(tup), _make_traceback());
-    }
+    void execute(is::no_clause n) { _raise_tuple("nomatch"_sym, ex.nth(n.unmatched)); }
     void execute(is::dot d) {
         auto& lhs = ex.nth(d.object);
         auto  rhs = ex.nth(d.attr_name).as_symbol();
@@ -468,16 +474,8 @@ struct exec_visitor {
         } else if (auto str = arg.as_string()) {
             ex.push(*str);
         } else {
-            let::raise(let::tuple::make("einval", "to_string"_sym, arg), _make_traceback());
+            _raise_tuple("einval"_sym, "to_string"_sym, arg);
         }
-    }
-
-    std::vector<std::string> _make_traceback() const {
-        std::vector<std::string> traceback;
-        for (auto& fr : ex._call_frames) {
-            traceback.push_back(fr.ident());
-        }
-        return traceback;
     }
 
     void execute(is::raise r) {
