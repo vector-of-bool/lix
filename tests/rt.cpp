@@ -590,3 +590,20 @@ TEST_CASE("to_string") {
     )";
     CHECK_NOTHROW(let::eval(code));
 }
+
+TEST_CASE("Unbound captured name in anon_fn") {
+    auto code = R"(
+        value = 12
+        call_fun = fn fun, arg -> fun.(arg) end
+        {foo, foo2} = call_fun.(
+            fn
+                # Even though `foo` is a name in the parent scope, it is not
+                # yet been declared. As such, `foo` in this context is an
+                # unbound, not a closure variable
+                foo -> {foo + 2, foo}
+            end,
+            12
+        )
+    )";
+    CHECK_NOTHROW(let::eval(code));
+}
