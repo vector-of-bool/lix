@@ -139,7 +139,7 @@ struct frame_id {
 struct call_mfa {
     let::symbol module;
     let::symbol fn;
-    slot_ref_t  arg;
+    std::vector<slot_ref_t> args;
 };
 struct debug {};
 // Intrinsic functions:

@@ -407,20 +407,21 @@ struct block_compiler {
         for (auto& arg : args.nodes) {
             arg_slots.push_back(compile(arg));
         }
-        builder.push_instr(is::mk_tuple_n{std::move(arg_slots)});
-        auto arg_slot = consume_slot();
-
-        auto mfa_ret_slot = _try_compile_mfa(lhs, meta, arg_slot);
+        auto mfa_ret_slot = _try_compile_mfa(lhs, meta, arg_slots);
         if (mfa_ret_slot) {
             return *mfa_ret_slot;
         }
+
+        builder.push_instr(is::mk_tuple_n{std::move(arg_slots)});
+        auto arg_slot = consume_slot();
+
         auto fn_slot = compile(lhs);
         builder.push_instr(is::call{fn_slot, arg_slot});
         return consume_slot();
     }
 
     std::optional<slot_ref_t>
-    _try_compile_mfa(const ast::node& lhs, const ast::meta&, slot_ref_t arg_slot) {
+    _try_compile_mfa(const ast::node& lhs, const ast::meta&, const std::vector<slot_ref_t>& arg_slots) {
         auto lhs_call = lhs.as_call();
         using std::nullopt;
         if (!lhs_call) {
@@ -446,7 +447,7 @@ struct block_compiler {
             // Not a valid dot expression, but we don't worry that here
             return nullopt;
         }
-        builder.push_instr(is::call_mfa{*modname, *fn_name, arg_slot});
+        builder.push_instr(is::call_mfa{*modname, *fn_name, arg_slots});
         return consume_slot();
     }
 

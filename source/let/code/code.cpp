@@ -36,7 +36,16 @@ struct code_ostream_visitor {
     void operator()(is::ret r) { o << std::setw(13) << "ret  " << r.slot; }
     void operator()(is::call c) { o << std::setw(13) << "call  " << c.fn << ", " << c.arg; }
     void operator()(is::call_mfa c) {
-        o << std::setw(13) << "call_mfa  " << c.module.string() << "." << c.fn.string() << "(" << c.arg << ")";
+        o << std::setw(13) << "call_mfa  " << c.module.string() << "." << c.fn.string() << "(";
+        auto arg_iter = c.args.begin();
+        auto arg_end = c.args.end();
+        while (arg_iter != arg_end) {
+            o << *arg_iter++;
+            if (arg_iter != arg_end) {
+                o << ", ";
+            }
+        }
+        o << ')';
     }
     void operator()(is::add a) { o << std::setw(13) << "add  " << a.a << ", " << a.b; }
     void operator()(is::sub s) { o << std::setw(13) << "sub  " << s.a << ", " << s.b; }

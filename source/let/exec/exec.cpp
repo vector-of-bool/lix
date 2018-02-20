@@ -163,8 +163,12 @@ struct exec_visitor {
     }
 
     void execute(is::call_mfa c) {
-        auto& arg = ex.nth(c.arg);
-        auto  mod = ctx.get_module(c.module.string());
+        std::vector<let::value> vals;
+        for (auto slot: c.args) {
+            vals.push_back(ex.nth(slot));
+        }
+        auto tup = let::tuple(std::move(vals));
+        auto mod = ctx.get_module(c.module.string());
         if (!mod) {
             _raise_tuple("undefined"_sym, c.module);
         }
@@ -177,9 +181,9 @@ struct exec_visitor {
             for (auto& el : closure->captures()) {
                 ex.push(el);
             }
-            ex.push(arg);
+            ex.push(std::move(tup));
         } else if (auto native_fn = std::get_if<let::exec::function>(&*fun)) {
-            ex.push(native_fn->call_ll(ctx, arg));
+            ex.push(native_fn->call_ll(ctx, tup));
         } else {
             assert(false && "Unreachable");
             std::terminate();
