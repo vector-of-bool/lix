@@ -51,6 +51,75 @@ opt_ref<const string> get_var_string(const ast::node& n) {
     return varsym->string();
 }
 
+struct minifun_rewriter {
+    std::string  arg_prefix;
+    ast::integer n_args;
+
+    ast::node _make_arg_ref(ast::integer i) {
+        n_args = (std::max)(i, n_args);
+        return ast::make_variable(arg_prefix + std::to_string(i - 1));
+    }
+
+    ast::node operator()(ast::integer i) { return ast::node(i); }
+    ast::node operator()(ast::floating f) { return ast::node(f); }
+    ast::node operator()(ast::symbol s) { return ast::node(s); }
+    ast::node operator()(const ast::string& s) { return ast::node(s); }
+    ast::node operator()(const ast::list& l) {
+        ast::list ret;
+        for (auto& n : l.nodes) {
+            ret.nodes.push_back(n.visit(*this));
+        }
+        return ret;
+    }
+    ast::node operator()(const ast::tuple& t) {
+        ast::tuple ret;
+        for (auto& n : t.nodes) {
+            ret.nodes.push_back(n.visit(*this));
+        }
+        return ret;
+    }
+    ast::node operator()(const ast::call& c) {
+        auto& lhs = c.target();
+        if (lhs.as_symbol() && lhs.as_symbol()->string() == "&") {
+            auto arg_list = c.arguments().as_list();
+            if (arg_list && arg_list->nodes.size() == 1) {
+                auto first_int = arg_list->nodes[0].as_integer();
+                if (first_int) {
+                    // We're a minifun argument
+                    return _make_arg_ref(*first_int);
+                }
+            }
+        }
+        // Just a call
+        auto new_target = c.target().visit(*this);
+        auto new_args   = c.arguments().visit(*this);
+        return ast::call(new_target, c.meta(), new_args);
+    }
+};
+
+ast::node rewrite_minifun(const ast::list& args) {
+    if (args.nodes.size() != 1) {
+        throw std::runtime_error{"Invalid arguments to unary '&' operator"};
+    }
+    auto& first     = args.nodes[0];
+    auto  first_int = first.as_integer();
+    if (first_int) {
+        throw std::runtime_error{"Invalid &N argument outside of &() function expression"};
+    }
+    static unsigned  mf_counter = 0;
+    std::string      arg_prefix = "__minifun_arg_" + std::to_string(mf_counter++);
+    minifun_rewriter rewriter{arg_prefix, 0};
+    const auto       new_rhs = first.visit(rewriter);
+    ast::list        fn_arglist;
+    for (auto i = 0; i < rewriter.n_args; ++i) {
+        fn_arglist.nodes.push_back(ast::make_variable(arg_prefix + std::to_string(i)));
+    }
+    auto l2r_args = ast::make_list(fn_arglist, new_rhs);
+    const auto l2r_call = ast::call("->"_sym, {}, std::move(l2r_args));
+    auto       clause_list = ast::make_list(l2r_call);
+    return ast::call("fn"_sym, {}, clause_list);
+}
+
 struct block_compiler {
     code::code_builder& builder;
     varscope_stack      variable_scopes;
@@ -262,6 +331,9 @@ struct block_compiler {
                 auto rhs_slot = compile(args.nodes[1]);
                 builder.push_instr(is::neq{lhs_slot, rhs_slot});
                 return consume_slot();
+            } else if (lhs_str == "&") {
+                auto rewritten = rewrite_minifun(args);
+                return compile(rewritten);
             } else if (lhs_str == "cond") {
                 return _compile_cond(args.nodes);
             } else if (lhs_str == "case") {

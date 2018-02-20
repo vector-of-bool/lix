@@ -106,6 +106,9 @@ TEST_CASE("Parse a simple literal", "[parser]") {
             '''
         )",
          "'foo\nbar\n'"},
+         {"&1", "{:&, [], [1]}"},
+         {"&1 + 2", "{:+, [], [{:&, [], [1]}, 2]}"},
+         {"&foo + 2", "{:&, [], [{:+, [], [{:foo, [], :Var}, 2]}]}"},
     };
     for (auto [code, canon] : pairs) {
         INFO(code);

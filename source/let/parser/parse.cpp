@@ -487,6 +487,7 @@ struct lit_int : sor<lit_dec_int, lit_hex_int, lit_oct_int, lit_bin_int> {};
 SET_ERROR_MESSAGE(plus<cls_digit<xdigit>>, "Expected hexidecimal digit sequence");
 SET_ERROR_MESSAGE(plus<cls_digit<odigit>>, "Expected octal digit sequence");
 SET_ERROR_MESSAGE(plus<cls_digit<bdigit>>, "Expected binary digit sequence");
+SET_ERROR_MESSAGE(lit_int, "Expected integer literal");
 
 /**
  * We parse floats simply by looking for a decimal number, a dot, then another decimal
@@ -728,6 +729,13 @@ MARK_RESTORING(ex_var);
 ACTION(ex_var) {
     auto var = st.pop();
     st.push(call(std::move(var), {}, let::symbol("Var")));
+}
+
+struct lit_minifun_arg : seq<one<'&'>, must<lit_int>> {};
+ACTION(lit_minifun_arg) {
+    auto      arg_n = st.pop();
+    ast::list args({arg_n});
+    st.push(call("&"_sym, {}, args));
 }
 
 // Forward-decl for block expressions
@@ -978,6 +986,7 @@ SET_ERROR_MESSAGE(one<')'>, "Expected closing parenthesis");
  */
 struct ex_atomic : sor<ex_parenthesis,
                        lit_special_atom,
+                       lit_minifun_arg,
                        anon_fn,
                        ex_var,
                        lit_list,
@@ -1128,7 +1137,7 @@ struct ex_unary_ : seq<ex_unary_op, ws, single_ex> {};
 struct ex_unary : sor<ex_unary_, ex_base> {};
 
 /**
- * Our binary operators.
+ * Our operators.
  *
  * The helper template ex_binary_operator helps us define operators with their
  * own associativity.
@@ -1143,10 +1152,21 @@ struct ex_concat
 struct ex_pipe : ex_binary_operator<STR("|>"), ex_concat, left> {};
 struct ex_compare_op : sor<STR("=="), STR("!="), STR("=~")> {};
 struct ex_compare : ex_binary_operator<ex_compare_op, ex_pipe, left> {};
-struct ex_assign : ex_binary_operator<STR("="), ex_compare, right> {};
+struct ex_minifun_tail : seq<ex_compare> {};
+struct ex_minifun_ : seq<one<'&'>, not_at<lit_int>, ws, must<ex_minifun_tail>> {};
+struct ex_minifun : sor<ex_minifun_, ex_compare> {};
+struct ex_assign : ex_binary_operator<STR("="), ex_minifun, right> {};
 struct ex_binor : ex_binary_operator<STR("|"), ex_assign, right> {};
 struct ex_typespec : ex_binary_operator<STR("::"), ex_binor, right> {};
 struct ex_left_arrow : ex_binary_operator<STR("<-"), ex_typespec, right> {};
+
+SET_ERROR_MESSAGE(ex_minifun_tail, "Expected expression for &-style function");
+
+ACTION(ex_minifun_) {
+    auto fn = st.pop();
+    ast::list args({fn});
+    st.push(ast::call("&"_sym, {}, args));
+}
 
 /**
  * Any single expression (Not a block expression)

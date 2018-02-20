@@ -50,6 +50,8 @@ TEST_CASE("Create a context with libraries") {
         :foo = Keyword.get(kwlist, :meow, :foo)
         "String" = Keyword.get(kwlist, :baz)
 
+        [2, 3, 4] = Enum.map([1, 2, 3], &(&1 + 1))
+
         IO.puts("Hello, Mike")
     )code",
                     ctx);

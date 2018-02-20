@@ -45,14 +45,12 @@ class meta {
 public:
     meta() = default;
 
-    void set_fn_details(std::string module, std::string name) {
-        _fn_details.emplace(module, name);
-    }
+    void set_fn_details(std::string module, std::string name) { _fn_details.emplace(module, name); }
 
     auto& fn_details() const noexcept { return _fn_details; }
 };
 
-struct call {
+class call {
     std::shared_ptr<node> _target;
     struct meta           _meta;
     std::shared_ptr<node> _arguments;
@@ -130,6 +128,11 @@ call::call(node el, let::ast::meta m, node args)
 
 inline ast::node make_variable(const std::string_view& s) {
     return ast::call(symbol(s), {}, symbol("Var"));
+}
+
+template <typename... Args>
+ast::list make_list(Args&&... args) {
+    return ast::list({ast::node(std::forward<Args>(args))...});
 }
 
 inline ast::node make_assignment(const std::string_view& varname, ast::node rhs) {
