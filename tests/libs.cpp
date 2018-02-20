@@ -52,6 +52,10 @@ TEST_CASE("Create a context with libraries") {
 
         [2, 3, 4] = Enum.map([1, 2, 3], &(&1 + 1))
 
+        2 = Enum.find([1, 2, 3, 4], &(&1 * 2 == 4))
+
+        {[:a, :b, :c], [1, 2, 3]} = Enum.unzip(a: 1, b: 2, c: 3)
+
         IO.puts("Hello, Mike")
     )code",
                     ctx);
