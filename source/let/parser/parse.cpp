@@ -1242,7 +1242,7 @@ ACTION(l2r_lhs_expr_one) {
 }
 SET_ERROR_MESSAGE(l2r_lhs_expr_one, "Expected single expression following comma");
 struct l2r_seq_element_head
-    : seq<opt<list_must<l2r_lhs_expr_one, one<','>, blank>>, ws, STR("->")> {};
+    : seq<opt<list_must<l2r_lhs_expr_one, one<','>, space>>, ws, STR("->")> {};
 struct l2r_seq_element : seq<meta_prep_arglist, l2r_seq_element_head, ws, must<block_expr>> {};
 MARK_RESTORING(l2r_seq_element);
 MARK_LOGGED(l2r_seq_element);
