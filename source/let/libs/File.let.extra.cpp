@@ -1,14 +1,52 @@
 #include <cstdlib>
 
+#include <chrono>
 #include <fstream>
 
+#include <let/raise.hpp>
 #include <let/util/args.hpp>
 #include <let/util/wrap_fn.hpp>
 
 // TODO: Windows
+#include <sys/stat.h>
 #include <unistd.h>
 
 using namespace let::literals;
+
+namespace let::File {
+
+struct Stat {
+    let::integer access;
+    let::integer atime;
+    let::integer ctime;
+    let::integer gid;
+    let::integer inode;
+    let::integer links;
+    let::integer major_device;
+    let::integer minor_device;
+    let::integer mode;
+    let::integer mtime;
+    let::integer size;
+    let::integer type;
+    let::integer uid;
+};
+
+}  // namespace let::File
+
+LET_TYPEINFO(let::File::Stat,
+             access,
+             atime,
+             ctime,
+             gid,
+             inode,
+             links,
+             major_device,
+             minor_device,
+             mode,
+             mtime,
+             size,
+             type,
+             uid);
 
 namespace {
 
@@ -43,6 +81,10 @@ let::symbol error_code_to_sym(int e) {
     }
 }
 
+let::integer convert_time_t_to_sec(::timespec t) {
+    return t.tv_sec;
+}
+
 let::exec::module& file_basemod() {
     static auto mod = [] {
         let::exec::module mod;
@@ -57,7 +99,8 @@ let::exec::module& file_basemod() {
                                  std::copy(content.begin(), content.end(), iter(outfile));
                                  return "ok"_sym;
                              } catch (const std::system_error& e) {
-                                 return let::tuple::make("error"_sym, error_code_to_sym(e.code().value()));
+                                 return let::tuple::make("error"_sym,
+                                                         error_code_to_sym(e.code().value()));
                              }
                          }));
         mod.add_function("rm", let::wrap_function([](const std::string& filepath) -> let::value {
@@ -65,6 +108,25 @@ let::exec::module& file_basemod() {
                                  return let::tuple::make("error"_sym, error_code_to_sym(errno));
                              }
                              return "ok"_sym;
+                         }));
+        mod.add_function("stat", let::wrap_function([](const std::string& filepath) -> let::value {
+                             struct ::stat st;
+                             auto          err = ::stat(filepath.data(), &st);
+                             if (err != 0) {
+                                 return let::tuple::make("error"_sym, error_code_to_sym(errno));
+                             }
+                             let::File::Stat let_stat;
+                             let_stat.major_device = st.st_dev;
+                             let_stat.minor_device = st.st_rdev;
+                             let_stat.inode        = st.st_ino;
+                             let_stat.mode         = st.st_mode;
+                             let_stat.uid          = st.st_uid;
+                             let_stat.gid          = st.st_gid;
+                             let_stat.size         = st.st_size;
+                             let_stat.atime        = convert_time_t_to_sec(st.st_atim);
+                             let_stat.mtime        = convert_time_t_to_sec(st.st_mtim);
+                             let_stat.ctime        = convert_time_t_to_sec(st.st_ctim);
+                             return let::tuple::make("ok"_sym, let::boxed(let_stat));
                          }));
         return mod;
     }();
