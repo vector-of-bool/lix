@@ -853,7 +853,7 @@ struct paren_args_kw_tail :
         ws,
         sor<
             // Recursive case:
-            seq<one<','>, paren_args_kw_tail>,
+            seq<one<','>, ws, paren_args_kw_tail>,
             // If not a keyword argument, we must be at the end of the call arguments
             // We parse an optional trailing comma, then the closing paren, then
             // an optional do-block
