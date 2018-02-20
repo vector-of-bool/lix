@@ -20,7 +20,7 @@ TEST_CASE("Create a context with libraries") {
         end)
 
         [1, 2, 3] = Enum.flatten([
-            1,
+            [1],
             [2, 3]
         ])
 

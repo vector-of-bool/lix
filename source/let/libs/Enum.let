@@ -11,10 +11,9 @@ defmodule Enum do
   def reduce([], acc, cb), do: acc
 
   def map(list, cb) do
-    final = reduce(list, [], fn
-      el, acc -> [cb.(el)|acc]
-    end)
-    reverse(final)
+    list
+      |> reduce([], fn el, acc -> [cb.(el)|acc] end)
+      |> reverse()
   end
 
   def reverse(list), do: Kernel.__reverse_list(list)
@@ -52,7 +51,8 @@ defmodule Enum do
         cond do
           is_list(el) ->
             reduce(el, acc, fn el2, acc2 -> [el2|acc2] end)
-          true -> [el|acc]
+          true ->
+            raise {:badarg, {"Elements to Enum.flatten list must also be lists", el}}
         end
     end)
   end
@@ -73,6 +73,17 @@ defmodule Enum do
     case pair do
       {false, nil} -> default
       {true, ret} -> ret
+    end
+  end
+
+  def unzip(seq) do
+    reduce(seq, {[], []}, fn
+      {a, b}, {alist, blist} ->
+        {[a|alist], [b|blist]}
+    end)
+    |> case do
+      {a, b} ->
+        {reverse(a), reverse(b)}
     end
   end
 end
