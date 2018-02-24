@@ -2,7 +2,7 @@
 
 #include <let/value.hpp>
 
-#define HAMT_DEBUG_VERBOSE 1
+// #define HAMT_DEBUG_VERBOSE 1
 
 #include <hamt/hash_trie.hpp>
 
@@ -178,3 +178,5 @@ std::pair<let::value, map> map::pop(const let::value& key) const {
 }
 
 opt_ref<const value> map::find(const let::value& key) const { return _impl->find(key); }
+
+std::ostream& let::operator<<(std::ostream& o, const let::map& map) { o << "%{[map]}"; }

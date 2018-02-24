@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <utility>
+#include <ostream>
 
 #include <let/util/opt_ref.hpp>
 #include <let/value_fwd.hpp>
@@ -38,6 +39,8 @@ public:
     [[nodiscard]] std::pair<let::value, map> pop(const let::value&) const;
     [[nodiscard]] opt_ref<const let::value>  find(const let::value&) const;
 };
+
+std::ostream& operator<<(std::ostream& o, const map& l);
 
 }  // namespace let
 
