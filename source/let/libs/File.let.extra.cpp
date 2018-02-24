@@ -81,9 +81,7 @@ let::symbol error_code_to_sym(int e) {
     }
 }
 
-let::integer convert_time_t_to_sec(::timespec t) {
-    return t.tv_sec;
-}
+let::integer convert_time_t_to_sec(::timespec t) { return t.tv_sec; }
 
 let::exec::module& file_basemod() {
     static auto mod = [] {
@@ -92,12 +90,26 @@ let::exec::module& file_basemod() {
                          let::wrap_function([](const std::string& filepath,
                                                const std::string& content) -> let::value {
                              std::ofstream outfile;
-                             outfile.exceptions(std::ifstream::failbit);
+                             outfile.exceptions(std::fstream::failbit);
                              try {
                                  outfile.open(filepath, std::ios_base::binary);
                                  using iter = std::ostreambuf_iterator<char>;
                                  std::copy(content.begin(), content.end(), iter(outfile));
                                  return "ok"_sym;
+                             } catch (const std::system_error& e) {
+                                 return let::tuple::make("error"_sym,
+                                                         error_code_to_sym(e.code().value()));
+                             }
+                         }));
+        mod.add_function("read", let::wrap_function([](const std::string& filepath) -> let::value {
+                             std::ifstream infile;
+                             infile.exceptions(std::fstream::failbit);
+                             try {
+                                 infile.open(filepath, std::ios_base::binary);
+                                 using iter = std::istreambuf_iterator<char>;
+                                 std::string content;
+                                 std::copy(iter(infile), iter(), std::back_inserter(content));
+                                 return let::tuple::make("ok"_sym, std::move(content));
                              } catch (const std::system_error& e) {
                                  return let::tuple::make("error"_sym,
                                                          error_code_to_sym(e.code().value()));
