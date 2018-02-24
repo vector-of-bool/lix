@@ -1,5 +1,7 @@
 #include "exec.hpp"
 
+#include <let/compiler/compile.hpp>
+
 #include <let/refl_get_member.hpp>
 
 using namespace let;
@@ -131,7 +133,7 @@ struct exec_visitor {
     }
 
     template <typename... Args>
-    void _raise_tuple(Args&&... args) const {
+    [[noreturn]] void _raise_tuple(Args&&... args) const {
         auto tup = let::tuple::make(std::forward<Args>(args)...);
         let::raise(tup, _make_traceback());
     }
@@ -139,6 +141,8 @@ struct exec_visitor {
     let::value _call_ll(const let::exec::function& fn, const let::value& argument) const {
         try {
             return fn.call_ll(ctx, argument);
+        } catch (const let::compile_error& e) {
+            _raise_tuple("CompileError"_sym, e.line(), e.column(), e.what());
         } catch (const std::runtime_error& e) {
             _raise_tuple("RuntimeError"_sym, e.what());
         }
@@ -172,7 +176,7 @@ struct exec_visitor {
 
     void execute(is::call_mfa c) {
         std::vector<let::value> vals;
-        for (auto slot: c.args) {
+        for (auto slot : c.args) {
             vals.push_back(ex.nth(slot));
         }
         auto tup = let::tuple(std::move(vals));
@@ -431,6 +435,18 @@ struct exec_visitor {
         ex.push(let::list(std::make_move_iterator(new_list.begin()),
                           std::make_move_iterator(new_list.end())));
     }
+    void execute(const is::mk_map& m) {
+        let::map map;
+        for (auto slot : m.slots) {
+            auto& pair = ex.nth(slot);
+            auto tup  = pair.as_tuple();
+            if (!tup && tup->size() != 2) {
+                _raise_tuple("badarg"_sym, "%{}", pair);
+            }
+            map = map.insert((*tup)[0], (*tup)[1]);
+        }
+        ex.push(std::move(map));
+    }
     void execute(const is::mk_closure& clos) {
         std::vector<let::value> captured;
         for (auto& slot : clos.captures) {
@@ -463,6 +479,12 @@ struct exec_visitor {
                                          + rhs->string() + "'"};
             }
             std::visit([&](auto&& fn) { ex.push(fn); }, *maybe_fn);
+        } else if (auto lhs_map = lhs.as_map()) {
+            auto elem = lhs_map->find(*rhs);
+            if (!elem) {
+                _raise_tuple("KeyError"_sym, *rhs);
+            }
+            ex.push(*elem);
         } else if (auto lhs_box = lhs.as_boxed()) {
             _dot_boxed(*lhs_box, rhs->string());
         } else {
@@ -488,6 +510,10 @@ struct exec_visitor {
         } else {
             _raise_tuple("einval"_sym, "to_string"_sym, arg);
         }
+    }
+    void execute(is::inspect t) {
+        auto& arg = ex.nth(t.arg);
+        ex.push(let::inspect(arg));
     }
 
     void execute(is::raise r) {

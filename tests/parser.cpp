@@ -112,6 +112,9 @@ TEST_CASE("Parse a simple literal", "[parser]") {
         {"&foo + 2", "{:&, [], [{:+, [], [{:foo, [], :Var}, 2]}]}"},
         {"foo(bar: 12, baz: 2)", "{:foo, [], [[{:bar, 12}, {:baz, 2}]]}"},
         {"foo(bar: 12, \nbaz: 2\n)", "{:foo, [], [[{:bar, 12}, {:baz, 2}]]}"},
+        {"%{}", "{:%{}, [], []}"},
+        {"%{foo: 1}", "{:%{}, [], [{:foo, 1}]}"},
+        {"%{:foo => 1}", "{:%{}, [], [{:foo, 1}]}"},
     };
     for (auto [code, canon] : pairs) {
         INFO(code);

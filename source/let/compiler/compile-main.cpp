@@ -1,5 +1,7 @@
 #include <let/parser/parse.hpp>
 #include <let/compiler/compile.hpp>
+#include <let/exec/kernel.hpp>
+#include <let/compiler/macro.hpp>
 
 #include <algorithm>
 #include <fstream>
@@ -11,7 +13,9 @@ int compile_istream(std::istream& in) {
     using iter = std::istreambuf_iterator<char>;
     std::copy(iter(in), iter{}, std::back_inserter(code));
     try {
-        auto node = let::ast::parse(code);
+        auto ctx   = let::exec::build_kernel_context();
+        auto node  = let::ast::parse(code);
+        node       = let::expand_macros(ctx, node);
         auto block = let::compile(node);
         std::cout << block;
     } catch (const let::ast::parse_error& e) {

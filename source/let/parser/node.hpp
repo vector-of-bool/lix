@@ -41,13 +41,20 @@ using string   = let::string;
 
 class meta {
     std::optional<std::pair<string, string>> _fn_details;
+    // File location details:
+    int                                      _line   = -1;
+    int                                      _column = -1;
 
 public:
     meta() = default;
 
     void set_fn_details(std::string module, std::string name) { _fn_details.emplace(module, name); }
-
     auto& fn_details() const noexcept { return _fn_details; }
+
+    void set_line(int line) { _line = line; }
+    auto line() const { return _line; }
+    void set_column(int column) { _column = column; }
+    auto column() const { return _column; }
 };
 
 class call {

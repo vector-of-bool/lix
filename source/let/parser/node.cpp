@@ -64,6 +64,39 @@ std::string ast::to_string(const node& n) {
 
 namespace {
 
+value meta_to_value(const meta& m) {
+    auto fn_dets = m.fn_details();
+    auto first
+        = fn_dets ? value(let::tuple::make(fn_dets->first, fn_dets->second)) : value("nil"_sym);
+    return let::tuple::make(first, m.line(), m.column());
+}
+
+ast::meta meta_from_value(const let::value& v) {
+    ast::meta ret;
+    auto      tup = v.as_tuple();
+    if (!tup || tup->size() != 3) {
+        return ret;
+    }
+    auto first = (*tup)[0];
+    auto pair  = first.as_tuple();
+    if (pair && pair->size() == 2) {
+        auto mod = (*pair)[0];
+        auto fn  = (*pair)[1];
+        if (mod.as_symbol() && fn.as_symbol()) {
+            ret.set_fn_details(mod.as_symbol()->string(), fn.as_symbol()->string());
+        }
+    }
+    auto line = (*tup)[1].as_integer();
+    if (line) {
+        ret.set_line(*line);
+    }
+    auto col = (*tup)[2].as_integer();
+    if (col) {
+        ret.set_column(*col);
+    }
+    return ret;
+}
+
 using let::value;
 struct to_value_converter {
     value operator()(const ast::list& l) {
@@ -89,7 +122,7 @@ struct to_value_converter {
     value operator()(const ast::call& c) {
         std::vector<value> triple;
         triple.emplace_back(c.target().to_value());
-        triple.emplace_back(let::list({}));
+        triple.emplace_back(meta_to_value(c.meta()));
         triple.emplace_back(c.arguments().to_value());
         return let::tuple(std::move(triple));
     }
@@ -103,11 +136,15 @@ struct from_value_converter {
         }
         return node(ast::list(std::move(nodes)));
     }
+    node operator()(const let::map&) {
+        assert(false && "TODO");
+        std::terminate();
+    }
     node operator()(const let::tuple& tup) {
         if (tup.size() == 3) {
             // It's a call
             auto target = node::from_value(tup[0]);
-            auto meta   = ast::meta{};  // TODO
+            auto meta   = meta_from_value(tup[1]);
             auto args   = node::from_value(tup[2]);
             return node(ast::call(std::move(target), meta, std::move(args)));
         } else {

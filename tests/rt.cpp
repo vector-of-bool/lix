@@ -98,6 +98,35 @@ TEST_CASE("Pass reference") {
     auto   boxed_ref = let::boxed(std::ref(i));
 }
 
+TEST_CASE("Map basics") {
+    let::map m;
+    auto     orig = m;
+    m             = m.insert("foo"_sym, 12);
+    // Check that we inserted:
+    auto ref = m.find("foo"_sym);
+    REQUIRE(ref);
+    CHECK(*ref == 12);
+    // Check that the original remains untouched:
+    ref = orig.find("foo"_sym);
+    CHECK_FALSE(ref);
+    // Find bogus element:
+    ref = m.find("cat"_sym);
+    CHECK_FALSE(ref);
+    // Try to insert a second item at the same key:
+    CHECK_THROWS_AS(m.insert("foo"_sym, 42), std::runtime_error);
+    ref = m.find("foo"_sym);
+    REQUIRE(ref);
+    CHECK(*ref == 12);
+    m   = m.insert_or_update("foo"_sym, 42);
+    ref = m.find("foo"_sym);
+    REQUIRE(ref);
+    CHECK(*ref == 42);
+    auto [old_val, new_map] = m.pop("foo"_sym);
+    m                       = new_map;
+    ref                     = m.find("foo"_sym);
+    CHECK_FALSE(ref);
+}
+
 TEST_CASE("Simple eval") {
     auto val = let::eval("2 + 5");
     REQUIRE(val.as_integer());
@@ -606,4 +635,27 @@ TEST_CASE("Unbound captured name in anon_fn") {
         )
     )";
     CHECK_NOTHROW(let::eval(code));
+}
+
+TEST_CASE("map 1") {
+    auto code = R"(
+        map = %{}
+    )";
+    auto ast  = let::ast::parse(code);
+    REQUIRE_NOTHROW(let::compile(ast));
+    auto block = let::compile(ast);
+    INFO(block);
+    REQUIRE_NOTHROW(let::eval(ast));
+}
+
+TEST_CASE("map 2") {
+    auto code = R"(
+        map = %{foo: 12}
+        12 = map.foo
+    )";
+    auto ast  = let::ast::parse(code);
+    REQUIRE_NOTHROW(let::compile(ast));
+    auto block = let::compile(ast);
+    INFO(block);
+    REQUIRE_NOTHROW(let::eval(ast));
 }

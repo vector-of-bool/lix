@@ -94,6 +94,8 @@ add_library(let STATIC
     let/boxed.cpp
     let/value.hpp
     let/value.cpp
+    let/map.hpp
+    let/map.cpp
     let/raise.hpp
     let/raise.cpp
     let/eval.hpp
@@ -108,7 +110,13 @@ add_library(let STATIC
     ${gen_lib_sources}
     )
 add_library(let::let ALIAS let)
-target_link_libraries(let PUBLIC let::base PRIVATE $<BUILD_INTERFACE:tao::pegtl>)
+target_link_libraries(let
+    PUBLIC
+        let::base
+    PRIVATE
+        $<BUILD_INTERFACE:tao::pegtl>
+        $<BUILD_INTERFACE:hamt::hamt>
+    )
 target_include_directories(let PUBLIC $<BUILD_INTERFACE:${gen_dir}>)
 set_property(TARGET let PROPERTY EXPORT_NAME let::let)
 

@@ -61,4 +61,15 @@ inline let::symbol operator""_sym(const char* cptr, std::size_t) { return let::s
 
 }  // namespace let
 
+namespace std {
+
+template <>
+struct hash<let::symbol> {
+    std::size_t operator()(let::symbol s) const {
+        return std::hash<std::string const*>()(&s.string());
+    }
+};
+
+} // namespace std
+
 #endif  // LET_SYMBOL_HPP_INCLUDED

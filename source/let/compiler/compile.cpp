@@ -97,14 +97,14 @@ struct minifun_rewriter {
     }
 };
 
-ast::node rewrite_minifun(const ast::list& args) {
+ast::node rewrite_minifun(const ast::list& args, const ast::meta& meta) {
     if (args.nodes.size() != 1) {
-        throw std::runtime_error{"Invalid arguments to unary '&' operator"};
+        throw compile_error("Invalid arguments to unary '&' operator", meta);
     }
     auto& first     = args.nodes[0];
     auto  first_int = first.as_integer();
     if (first_int) {
-        throw std::runtime_error{"Invalid &N argument outside of &() function expression"};
+        throw compile_error("Invalid &N argument outside of &() function expression", meta);
     }
     static unsigned  mf_counter = 0;
     std::string      arg_prefix = "__minifun_arg_" + std::to_string(mf_counter++);
@@ -114,8 +114,8 @@ ast::node rewrite_minifun(const ast::list& args) {
     for (auto i = 0; i < rewriter.n_args; ++i) {
         fn_arglist.nodes.push_back(ast::make_variable(arg_prefix + std::to_string(i)));
     }
-    auto l2r_args = ast::make_list(fn_arglist, new_rhs);
-    const auto l2r_call = ast::call("->"_sym, {}, std::move(l2r_args));
+    auto       l2r_args    = ast::make_list(fn_arglist, new_rhs);
+    const auto l2r_call    = ast::call("->"_sym, {}, std::move(l2r_args));
     auto       clause_list = ast::make_list(l2r_call);
     return ast::call("fn"_sym, {}, clause_list);
 }
@@ -314,7 +314,7 @@ struct block_compiler {
                 return consume_slot();
             } else if (lhs_str == "=") {
                 _check_binary(args);
-                return _compile_assign(args.nodes);
+                return _compile_assign(args.nodes, meta);
             } else if (lhs_str == "__block__") {
                 assert(args.nodes.size() != 0 && "Invalid block. Needs at least one expression");
                 auto ret = invalid_slot;
@@ -338,12 +338,12 @@ struct block_compiler {
                 builder.push_instr(is::neq{lhs_slot, rhs_slot});
                 return consume_slot();
             } else if (lhs_str == "&") {
-                auto rewritten = rewrite_minifun(args);
+                auto rewritten = rewrite_minifun(args, meta);
                 return compile(rewritten);
             } else if (lhs_str == "cond") {
-                return _compile_cond(args.nodes);
+                return _compile_cond(args.nodes, meta);
             } else if (lhs_str == "case") {
-                return _compile_case(args.nodes);
+                return _compile_case(args.nodes, meta);
             } else if (lhs_str == "quote") {
                 return _compile_quote(args);
             } else if (lhs_str == "is_list") {
@@ -353,14 +353,21 @@ struct block_compiler {
                 return consume_slot();
             } else if (lhs_str == "to_string") {
                 if (args.nodes.size() != 1) {
-                    throw std::runtime_error{"Invalid arguments for to_string()"};
+                    throw compile_error{"Invalid arguments for to_string()", meta};
                 }
                 auto rhs_slot = compile(args.nodes[0]);
                 builder.push_instr(is::to_string{rhs_slot});
                 return consume_slot();
+            } else if (lhs_str == "inspect") {
+                if (args.nodes.size() != 1) {
+                    throw compile_error{"Invalid arguments for inspect()", meta};
+                }
+                auto rhs_slot = compile(args.nodes[0]);
+                builder.push_instr(is::inspect{rhs_slot});
+                return consume_slot();
             } else if (lhs_str == "raise") {
                 if (args.nodes.size() != 1) {
-                    throw std::runtime_error{"'raise' expects one argument"};
+                    throw compile_error{"'raise' expects one argument", meta};
                 }
                 auto arg_slot = compile(args.nodes[0]);
                 builder.push_instr(is::raise{arg_slot});
@@ -382,12 +389,20 @@ struct block_compiler {
                 }
             } else if (lhs_str == "|>") {
                 _check_binary(args);
-                return _compile_pipe(args.nodes);
+                return _compile_pipe(args.nodes, meta);
             } else if (lhs_str == "fn") {
                 return _compile_anon_fn(args.nodes, meta);
+            } else if (lhs_str == "%{}") {
+                std::vector<slot_ref_t> slots;
+                for (auto& n : args.nodes) {
+                    auto next_slot = compile(n);
+                    slots.push_back(next_slot);
+                }
+                builder.push_instr(is::mk_map{std::move(slots)});
+                return consume_slot();
             } else if (lhs_str == "apply") {
                 if (args.nodes.size() != 3) {
-                    throw std::runtime_error{"'apply' expects three arguments"};
+                    throw compile_error{"'apply' expects three arguments", meta};
                 }
                 auto mod_slot = compile(args.nodes[0]);
                 auto fn_slot  = compile(args.nodes[1]);
@@ -399,9 +414,10 @@ struct block_compiler {
         // No special function
         if (auto lhs_sym = lhs.as_symbol()) {
             // Unqualified call is not allowed at this level in the AST
-            throw std::runtime_error{
+            throw compile_error{
                 "Unqualified function call does not resolve to a function in the current module: "
-                + lhs_sym->string()};
+                    + lhs_sym->string(),
+                meta};
         }
         std::vector<slot_ref_t> arg_slots;
         for (auto& arg : args.nodes) {
@@ -420,8 +436,9 @@ struct block_compiler {
         return consume_slot();
     }
 
-    std::optional<slot_ref_t>
-    _try_compile_mfa(const ast::node& lhs, const ast::meta&, const std::vector<slot_ref_t>& arg_slots) {
+    std::optional<slot_ref_t> _try_compile_mfa(const ast::node& lhs,
+                                               const ast::meta&,
+                                               const std::vector<slot_ref_t>& arg_slots) {
         auto lhs_call = lhs.as_call();
         using std::nullopt;
         if (!lhs_call) {
@@ -451,12 +468,12 @@ struct block_compiler {
         return consume_slot();
     }
 
-    slot_ref_t _compile_assign(const std::vector<ast::node>& args) {
+    slot_ref_t _compile_assign(const std::vector<ast::node>& args, const ast::meta& meta) {
         if (clause_test_depth != 0) {
-            throw std::runtime_error{
-                "Bindings `=` are not allowed within function or `case` clause heads"};
+            throw compile_error{
+                "Bindings `=` are not allowed within function or `case` clause heads", meta};
         }
-        auto rhs_slot = compile(args[1]);
+        auto rhs_slot      = compile(args[1]);
         auto left_var_name = get_var_string(args[0]);
         if (left_var_name) {
             auto var_slot = slot_for_variable(*left_var_name);
@@ -477,15 +494,15 @@ struct block_compiler {
         return rhs_slot;
     }
 
-    slot_ref_t _compile_pipe(const std::vector<ast::node>& pipe_args) {
+    slot_ref_t _compile_pipe(const std::vector<ast::node>& pipe_args, const ast::meta& meta) {
         auto lhs_node = pipe_args[0];
         auto rhs_call = pipe_args[1].as_call();
         if (!rhs_call) {
-            throw std::runtime_error{"Right-hand of |> operator must be a function call"};
+            throw compile_error{"Right-hand of |> operator must be a function call", meta};
         }
         auto arglist = rhs_call->arguments().as_list();
         if (!arglist) {
-            throw std::runtime_error{"Right-hand of |> operator must be a function call"};
+            throw compile_error{"Right-hand of |> operator must be a function call", meta};
         }
         auto new_args = arglist->nodes;
         new_args.insert(new_args.begin(), pipe_args[0]);
@@ -494,11 +511,11 @@ struct block_compiler {
         return compile(new_ast);
     }
 
-    slot_ref_t _compile_case(const std::vector<ast::node>& case_args) {
+    slot_ref_t _compile_case(const std::vector<ast::node>& case_args, const ast::meta& meta) {
         // TODO:  Replace all these asserts with real error handling
-        auto arg_check = [](bool b) {
+        auto arg_check = [&](bool b) {
             if (!b) {
-                throw std::runtime_error{"`case` expects one argument and a 'do' clause list"};
+                throw compile_error{"`case` expects one argument and a 'do' clause list", meta};
             }
         };
         arg_check(case_args.size() == 2);
@@ -517,11 +534,11 @@ struct block_compiler {
     /**
      * `cond` is really just a special case of `case`.
      */
-    slot_ref_t _compile_cond(const std::vector<ast::node>& cond_args) {
+    slot_ref_t _compile_cond(const std::vector<ast::node>& cond_args, const ast::meta& meta) {
         // TODO:  Replace all these asserts with real error handling
-        auto arg_check = [](bool b) {
+        auto arg_check = [&](bool b) {
             if (!b) {
-                throw std::runtime_error{"`cond` expects a single 'do' clause list"};
+                throw compile_error{"`cond` expects a single 'do' clause list", meta};
             }
         };
         arg_check(cond_args.size() == 1);
@@ -604,7 +621,7 @@ struct block_compiler {
         assert(call);
         auto arrow = call->target().as_symbol();
         if (!arrow || arrow->string() != "->") {
-            throw std::runtime_error{"Invalid clause. Must have an l2r arrow"};
+            throw compile_error{"Invalid clause. Must have an l2r arrow", call->meta()};
         }
         auto args = call->arguments().as_list();
         assert(args);
@@ -892,8 +909,9 @@ struct block_compiler {
                     top_varmap().emplace(var_sym->string(), new_var_slot);
                     return new_var_slot;
                 } else {
-                    throw std::runtime_error{"Name '" + var_sym->string()
-                                             + "' does not name a variable bound at this scope."};
+                    throw compile_error{"Name '" + var_sym->string()
+                                            + "' does not name a variable bound at this scope.",
+                                        call.meta()};
                 }
             }
         }
@@ -936,7 +954,23 @@ struct block_compiler {
         return consume_slot();
     }
 };
+
+std::string make_error_whatstring(const std::string& what, let::opt_ref<const ast::meta> meta) {
+    if (meta) {
+        using std::to_string;
+        return "line " + to_string(meta->line()) + ", column " + to_string(meta->column()) + ": "
+            + what;
+    } else {
+        return what;
+    }
+}
+
 }  // namespace
+
+let::compile_error::compile_error(const std::string& what, let::opt_ref<const let::ast::meta> meta)
+    : std::runtime_error(make_error_whatstring(what, meta))
+    , _line(meta ? meta->line() : -1)
+    , _column(meta ? meta->column() : -1) {}
 
 code::code let::compile(const ast::node& node) {
     let::code::code_builder builder;

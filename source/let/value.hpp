@@ -5,6 +5,7 @@
 #include <let/exec/closure.hpp>
 #include <let/exec/fn_no_impl.hpp>
 #include <let/list_fwd.hpp>
+#include <let/map.hpp>
 #include <let/numbers.hpp>
 #include <let/string.hpp>
 #include <let/symbol.hpp>
@@ -14,6 +15,7 @@
 
 #include "value_fwd.hpp"
 
+#include <functional>
 #include <ostream>
 #include <variant>
 
@@ -53,6 +55,7 @@ class value {
                  let::string,
                  let::tuple,
                  let::list,
+                 let::map,
                  let::exec::function,
                  let::exec::closure,
                  let::exec::detail::binding_slot,
@@ -82,6 +85,7 @@ public:
     DECL_METHODS(let::string, string);
     DECL_METHODS(let::tuple, tuple);
     DECL_METHODS(let::list, list);
+    DECL_METHODS(let::map, map);
     DECL_METHODS(let::exec::function, function);
     DECL_METHODS(let::exec::closure, closure);
     DECL_METHODS(let::exec::detail::binding_slot, binding_slot);
@@ -124,8 +128,17 @@ inline std::ostream& operator<<(std::ostream& o, const value& rhs) {
 }
 
 std::string to_string(const value&);
+std::string inspect(const value&);
 
 }  // namespace let
+
+namespace std {
+
+template <> struct hash <let::value> {
+    std::size_t operator()(const let::value&) const;
+};
+
+} // namespace std
 
 #include <let/list.hpp>
 #include <let/refl_get_member.hpp>

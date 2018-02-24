@@ -3,9 +3,10 @@
 
 #include "value_fwd.hpp"
 
+#include <functional>
+#include <memory>
 #include <ostream>
 #include <stdexcept>
-#include <memory>
 #include <vector>
 
 namespace let {
@@ -72,5 +73,14 @@ const let::value& let::tuple::operator[](const std::size_t idx) const {
 }
 
 std::size_t let::tuple::size() const noexcept { return _values->size(); }
+
+namespace std {
+
+template <>
+struct hash<let::tuple> {
+    std::size_t operator()(const let::tuple&) const;
+};
+
+} // namespace std
 
 #endif  // LET_TUPLE_HPP_INCLUDED

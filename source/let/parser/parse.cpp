@@ -294,6 +294,15 @@ public:
     }
 };
 
+template <typename Input>
+ast::meta create_meta(Input&& in) {
+    auto pos = in.position();
+    ast::meta ret;
+    ret.set_line(pos.line);
+    ret.set_column(pos.byte_in_line);
+    return ret;
+}
+
 struct comment_no_nl : seq<one<'#'>, star<not_one<'\n'>>> {};
 
 using hspace = seq<star<blank>, opt<comment_no_nl>>;
@@ -572,7 +581,7 @@ ACTION(lit_tuple) {
     if (node_list.nodes.size() != 3) {
         st.push(tuple(std::move(node_list.nodes)));
     } else {
-        st.push(call(symbol("{}"), {}, std::move(node_list)));
+        st.push(call(symbol("{}"), create_meta(in), std::move(node_list)));
     }
 }
 MARK_LOGGED(lit_tuple);
@@ -593,6 +602,35 @@ struct lit_list_tail : sor<seq<sor<lit_list_elem, keyword_arg>,
                            one<']'>> {};
 struct lit_list : if_must<seq<one<'['>, ws, meta_prep_arglist>, lit_list_tail> {};
 SET_ERROR_MESSAGE(lit_list_tail, "Expected list element, keyword pair, or closing ']'");
+
+struct lit_map_value : sor<single_ex> {};
+SET_ERROR_MESSAGE(lit_map_value, "Expected value following => in map literal");
+struct lit_map_elem : seq<single_ex, ws, STR("=>"), ws, must<lit_map_value>> {};
+MARK_RESTORING(lit_map_elem);
+ACTION(lit_map_elem) {
+    auto                   val = st.pop();
+    auto                   key = st.pop();
+    std::vector<ast::node> nodes{key, val};
+    st.push_to_list(tuple(std::move(nodes)));
+}
+struct lit_map_tail : sor<
+                          // Another map elem:
+                          seq<sor<lit_map_elem, keyword_arg>,
+                              // Recurse on end
+                              ws,
+                              sor<
+                                  // End now
+                                  one<'}'>,
+                                  // Another element, or tail
+                                  seq<one<','>, ws, must<lit_map_tail>>>>,
+                          // Or end of map:
+                          one<'}'>> {};
+SET_ERROR_MESSAGE(lit_map_tail, "Expected map element or closing '}'");
+struct lit_map : seq<STR("%{"), ws, meta_prep_arglist, must<lit_map_tail>> {};
+ACTION(lit_map) {
+    auto arglist = st.pop();
+    st.push(call(node("%{}"_sym), create_meta(in), arglist));
+}
 
 template <char Delim>
 struct string_inner : star<sor<
@@ -729,14 +767,14 @@ MARK_LOGGED(ex_var);
 MARK_RESTORING(ex_var);
 ACTION(ex_var) {
     auto var = st.pop();
-    st.push(call(std::move(var), {}, let::symbol("Var")));
+    st.push(call(std::move(var), create_meta(in), let::symbol("Var")));
 }
 
 struct lit_minifun_arg : seq<one<'&'>, must<lit_int>> {};
 ACTION(lit_minifun_arg) {
     auto      arg_n = st.pop();
     ast::list args({arg_n});
-    st.push(call("&"_sym, {}, args));
+    st.push(call("&"_sym, create_meta(in), args));
 }
 
 // Forward-decl for block expressions
@@ -959,7 +997,7 @@ MARK_RESTORING(ex_base_call);
 ACTION(ex_base_call) {
     auto args = st.pop();
     auto fn   = st.pop();
-    st.push(call(std::move(fn), {}, std::move(args)));
+    st.push(call(std::move(fn), create_meta(in), std::move(args)));
 }
 
 struct anon_fn_tail : seq<l2r_seq_expr_exact, ws, must<kw_end>> {};
@@ -968,7 +1006,7 @@ struct anon_fn : seq<kw_fn, ws, must<anon_fn_tail>> {};
 MARK_LOGGED(anon_fn);
 ACTION(anon_fn) {
     auto clauses = st.pop();
-    st.push(call(symbol("fn"), {}, std::move(clauses)));
+    st.push(call(symbol("fn"), create_meta(in), std::move(clauses)));
 }
 template <>
 struct inout_action<anon_fn> {
@@ -990,6 +1028,7 @@ struct ex_atomic : sor<ex_parenthesis,
                        lit_minifun_arg,
                        anon_fn,
                        ex_var,
+                       lit_map,
                        lit_list,
                        lit_tuple,
                        lit_string,
@@ -1055,7 +1094,7 @@ struct action<detail::binop_operator_inner<Rule>> {
 template <typename BinOp>
 struct action<detail::binop_tail<BinOp>> {
     template <typename In>
-    static void apply(In&&, parser_state& st) {
+    static void apply(In&& in, parser_state& st) {
         // We've pushed two operands
         auto      rhs = st.pop();
         auto      op  = st.pop();
@@ -1063,7 +1102,7 @@ struct action<detail::binop_tail<BinOp>> {
         ast::list args;
         args.nodes.push_back(std::move(lhs));
         args.nodes.push_back(std::move(rhs));
-        st.push(call(std::move(op), {}, std::move(args)));
+        st.push(call(std::move(op), create_meta(in), std::move(args)));
     }
 };
 
@@ -1156,7 +1195,7 @@ struct ex_compare : ex_binary_operator<ex_compare_op, ex_pipe, left> {};
 struct ex_minifun_tail : seq<ex_compare> {};
 struct ex_minifun_ : seq<one<'&'>, not_at<lit_int>, ws, must<ex_minifun_tail>> {};
 struct ex_minifun : sor<ex_minifun_, ex_compare> {};
-struct ex_assign : ex_binary_operator<STR("="), ex_minifun, right> {};
+struct ex_assign : ex_binary_operator<seq<one<'='>, not_at<one<'>'>>>, ex_minifun, right> {};
 struct ex_binor : ex_binary_operator<STR("|"), ex_assign, right> {};
 struct ex_typespec : ex_binary_operator<STR("::"), ex_binor, right> {};
 struct ex_left_arrow : ex_binary_operator<STR("<-"), ex_typespec, right> {};
@@ -1164,9 +1203,9 @@ struct ex_left_arrow : ex_binary_operator<STR("<-"), ex_typespec, right> {};
 SET_ERROR_MESSAGE(ex_minifun_tail, "Expected expression for &-style function");
 
 ACTION(ex_minifun_) {
-    auto fn = st.pop();
+    auto      fn = st.pop();
     ast::list args({fn});
-    st.push(ast::call("&"_sym, {}, args));
+    st.push(ast::call("&"_sym, create_meta(in), args));
 }
 
 /**
@@ -1220,7 +1259,7 @@ struct block_expr_commit : seq<success> {};
 ACTION(block_expr_commit) {
     // Convert our expression list into a call to the "__block__" operator
     auto exprs = st.pop();
-    st.push(call(symbol("__block__"), {}, std::move(exprs)));
+    st.push(call(symbol("__block__"), create_meta(in), std::move(exprs)));
 }
 
 /**
@@ -1253,7 +1292,7 @@ ACTION(l2r_seq_element) {
     auto args  = ast::list();
     args.nodes.push_back(std::move(lhs));
     args.nodes.push_back(std::move(block));
-    auto tup = call(symbol("->"), {}, std::move(args));
+    auto tup = call(symbol("->"), create_meta(in), std::move(args));
     st.push_to_list(std::move(tup));
 }
 // MARK_RESTORING(l2r_seq_expr_);
@@ -1327,7 +1366,7 @@ ACTION(ex_closure_callable) {
     auto      var = st.pop();
     ast::list args;
     args.nodes.push_back(std::move(var));
-    st.push(call(symbol("."), {}, std::move(args)));
+    st.push(call(symbol("."), create_meta(in), std::move(args)));
 }
 ACTION(ex_remote_callable) {
     // Put in an operator .
@@ -1336,7 +1375,7 @@ ACTION(ex_remote_callable) {
     ast::list args;
     args.nodes.push_back(std::move(module));
     args.nodes.push_back(std::move(fn));
-    st.push(call(symbol("."), {}, std::move(args)));
+    st.push(call(symbol("."), create_meta(in), std::move(args)));
 }
 ACTION(call_arg_expr) {
     // Take the current top expression and push it onto the argument list
@@ -1351,7 +1390,7 @@ ACTION(ex_subscript_tail) {
     ast::list args;
     args.nodes.push_back(std::move(left));
     args.nodes.push_back(std::move(inner));
-    st.push(call(symbol("[]"), {}, std::move(args)));
+    st.push(call(symbol("[]"), create_meta(in), std::move(args)));
 }
 ACTION(ex_dot_access) {
     auto      right = st.pop();
@@ -1359,12 +1398,12 @@ ACTION(ex_dot_access) {
     ast::list args;
     args.nodes.push_back(std::move(left));
     args.nodes.push_back(std::move(right));
-    st.push(call(symbol("."), {}, std::move(args)));
+    st.push(call(symbol("."), create_meta(in), std::move(args)));
 }
 ACTION(ex_call_tail) {
     auto args = st.pop();
     auto left = st.pop();
-    st.push(call(std::move(left), {}, std::move(args)));
+    st.push(call(std::move(left), create_meta(in), std::move(args)));
 }
 
 ACTION(ex_unary_op) { st.push(symbol(in.string())); }
@@ -1373,7 +1412,7 @@ ACTION(ex_unary_) {
     auto      op      = st.pop();
     ast::list args;
     args.nodes.push_back(std::move(operand));
-    st.push(call(std::move(op), {}, std::move(args)));
+    st.push(call(std::move(op), create_meta(in), std::move(args)));
 }
 
 /**

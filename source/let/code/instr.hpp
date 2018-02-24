@@ -93,6 +93,9 @@ struct mk_tuple_n {
 struct mk_list {
     std::vector<slot_ref_t> slots;
 };
+struct mk_map {
+    std::vector<slot_ref_t> slots;
+};
 struct mk_closure {
     inst_offset_t           code_begin;
     inst_offset_t           code_end;
@@ -149,6 +152,9 @@ struct is_list {
 struct to_string {
     slot_ref_t arg;
 };
+struct inspect {
+    slot_ref_t arg;
+};
 struct apply {
     slot_ref_t mod;
     slot_ref_t fn;
@@ -184,6 +190,7 @@ using any_var = std::variant<ret,
                              mk_tuple_7,
                              mk_tuple_n,
                              mk_list,
+                             mk_map,
                              jump,
                              test_true,
                              false_jump,
@@ -192,6 +199,7 @@ using any_var = std::variant<ret,
                              dot,
                              is_list,
                              to_string,
+                             inspect,
                              apply,
                              raise,
                              mk_closure,

@@ -16,6 +16,17 @@ defmodule Enum do
       |> reverse()
   end
 
+  def map_filter(list, cb) do
+    reduce(list, [], fn
+      el, acc ->
+        case cb.(el) do
+          false -> acc
+          {:ok, other} -> [other|acc]
+        end
+    end)
+      |> reverse()
+  end
+
   def reverse(list), do: Kernel.__reverse_list(list)
 
   def each(seq, cb),
@@ -55,6 +66,10 @@ defmodule Enum do
             raise {:badarg, {"Elements to Enum.flatten list must also be lists", el}}
         end
     end)
+  end
+
+  def flat_map(seq, cb) do
+    flatten(map(seq, cb))
   end
 
   def find(list, pred) do

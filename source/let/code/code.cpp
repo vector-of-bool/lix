@@ -38,7 +38,7 @@ struct code_ostream_visitor {
     void operator()(is::call_mfa c) {
         o << std::setw(13) << "call_mfa  " << c.module.string() << "." << c.fn.string() << "(";
         auto arg_iter = c.args.begin();
-        auto arg_end = c.args.end();
+        auto arg_end  = c.args.end();
         while (arg_iter != arg_end) {
             o << *arg_iter++;
             if (arg_iter != arg_end) {
@@ -104,6 +104,12 @@ struct code_ostream_visitor {
             o << slot << ", ";
         }
     }
+    void operator()(const is::mk_map& l) {
+        o << std::setw(13) << "mk_map  ";
+        for (auto slot : l.slots) {
+            o << slot << ", ";
+        }
+    }
     void operator()(const is::mk_tuple_n& n) {
         o << std::setw(13) << "mk_tuple_n  ";
         for (auto slot : n.slots) {
@@ -121,6 +127,7 @@ struct code_ostream_visitor {
     void operator()(is::test_true t) { o << std::setw(13) << "test_true  " << t.slot; }
     void operator()(is::is_list i) { o << std::setw(13) << "is_list  " << i.arg; }
     void operator()(is::to_string i) { o << std::setw(13) << "to_string  " << i.arg; }
+    void operator()(is::inspect i) { o << std::setw(13) << "inspect  " << i.arg; }
     void operator()(is::raise r) { o << std::setw(13) << "raise  " << r.arg; }
     void operator()(is::false_jump j) { o << std::setw(13) << "false_jump  " << j.target; }
     void operator()(is::rewind r) { o << std::setw(13) << "rewind  " << r.slot; }
