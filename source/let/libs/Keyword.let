@@ -18,4 +18,10 @@ defmodule Keyword do
       :error -> raise {KeyError, key}
     end
   end
+
+  def keys(kws) do
+    Enum.map(kws, fn
+      {key, _val} -> key
+    end)
+  end
 end
