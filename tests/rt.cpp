@@ -659,3 +659,21 @@ TEST_CASE("map 2") {
     INFO(block);
     REQUIRE_NOTHROW(let::eval(ast));
 }
+
+TEST_CASE("Tail call") {
+    auto code = R"(
+        tail_fn = fn
+            0, _ -> 42
+            val, tail ->
+                tail.(val - 1, tail)
+        end
+
+        42 = tail_fn.(999990, tail_fn)
+    )";
+    auto ctx  = let::exec::build_kernel_context();
+    auto ast  = let::ast::parse(code);
+    REQUIRE_NOTHROW(let::compile(ast));
+    auto block = let::compile(ast);
+    INFO(block);
+    REQUIRE_NOTHROW(let::eval(ast, ctx));
+}

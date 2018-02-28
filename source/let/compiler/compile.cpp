@@ -21,6 +21,11 @@ namespace {
 using let::code::inst_offset_t;
 using let::code::slot_ref_t;
 
+enum class tail_call {
+    enable,
+    disable,
+};
+
 constexpr slot_ref_t    invalid_slot = {static_cast<std::size_t>(-1)};
 constexpr inst_offset_t invalid_inst = {static_cast<std::size_t>(-1)};
 using varslot_map                    = std::map<std::string, slot_ref_t>;
@@ -32,6 +37,11 @@ struct capture {
 using capture_list = std::vector<capture>;
 
 struct expand_quoted {};
+
+struct drop_argument {
+    template <typename O>
+    drop_argument(O) {}
+};
 
 using varscope_stack = std::vector<varslot_map>;
 
@@ -61,7 +71,7 @@ struct minifun_rewriter {
     }
 
     ast::node operator()(ast::integer i) { return ast::node(i); }
-    ast::node operator()(ast::floating f) { return ast::node(f); }
+    ast::node operator()(ast::real f) { return ast::node(f); }
     ast::node operator()(ast::symbol s) { return ast::node(s); }
     ast::node operator()(const ast::string& s) { return ast::node(s); }
     ast::node operator()(const ast::list& l) {
@@ -193,22 +203,26 @@ struct block_compiler {
      * Compile the given AST node and return the slot that corresponds to its
      * resulting runtime value
      */
-    slot_ref_t compile(const ast::node& n) { return n.visit(*this); }
+    slot_ref_t compile(const ast::node& n, tail_call tail = tail_call::disable) {
+        return n.visit(*this, tail);
+    }
 
     /**
      * Compile the given AST with a new variable scope
      */
-    slot_ref_t _compile_new_scope(const ast::node& n) {
+    slot_ref_t _compile_new_scope(const ast::node& n, tail_call tail) {
         // Create a new variable scope:
         variable_scopes.emplace_back();
-        auto ret = compile(n);
+        auto ret = compile(n, tail);
         // Erase the variable scope. The variables from the scope are no longer visible
         variable_scopes.pop_back();
         return ret;
     }
 
     slot_ref_t compile_root(const ast::node& n) {
-        auto ret_slot = _compile_new_scope(n);
+        // Disable TCO at the root because we need the stack to remain for us
+        // to successfully return
+        auto ret_slot = _compile_new_scope(n, tail_call::disable);
         builder.push_instr(is::ret{ret_slot});
         return ret_slot;
     }
@@ -290,7 +304,10 @@ struct block_compiler {
         }
     }
 
-    slot_ref_t _compile_call(const ast::node& lhs, const ast::meta& meta, const ast::list& args) {
+    slot_ref_t _compile_call(const ast::node& lhs,
+                             const ast::meta& meta,
+                             const ast::list& args,
+                             tail_call        tail) {
         auto lhs_sym = lhs.as_symbol();
         if (lhs_sym) {
             auto& lhs_str = lhs_sym->string();
@@ -312,14 +329,29 @@ struct block_compiler {
                 auto rhs_slot = compile(args.nodes[1]);
                 builder.push_instr(is::mul{lhs_slot, rhs_slot});
                 return consume_slot();
+            } else if (lhs_str == "/") {
+                _check_binary(args);
+                auto lhs_slot = compile(args.nodes[0]);
+                auto rhs_slot = compile(args.nodes[1]);
+                builder.push_instr(is::div{lhs_slot, rhs_slot});
+                return consume_slot();
             } else if (lhs_str == "=") {
                 _check_binary(args);
                 return _compile_assign(args.nodes, meta);
             } else if (lhs_str == "__block__") {
                 assert(args.nodes.size() != 0 && "Invalid block. Needs at least one expression");
-                auto ret = invalid_slot;
-                for (auto& arg : args.nodes) {
-                    ret = compile(arg);
+                auto       ret      = invalid_slot;
+                auto       arg_iter = args.nodes.begin();
+                const auto arg_end  = args.nodes.end();
+                while (arg_iter != arg_end) {
+                    auto next    = std::next(arg_iter);
+                    auto is_last = next == arg_end;
+                    ret          = is_last
+                        // The last line of a block is a TCO candidate:
+                        ? compile(*arg_iter, tail)
+                        // Otherwise disable TCO
+                        : compile(*arg_iter);
+                    arg_iter = next;
                 }
                 // Return the slot from the last expression we compiled
                 return ret;
@@ -341,9 +373,9 @@ struct block_compiler {
                 auto rewritten = rewrite_minifun(args, meta);
                 return compile(rewritten);
             } else if (lhs_str == "cond") {
-                return _compile_cond(args.nodes, meta);
+                return _compile_cond(args.nodes, meta, tail);
             } else if (lhs_str == "case") {
-                return _compile_case(args.nodes, meta);
+                return _compile_case(args.nodes, meta, tail);
             } else if (lhs_str == "quote") {
                 return _compile_quote(args);
             } else if (lhs_str == "is_list") {
@@ -379,7 +411,7 @@ struct block_compiler {
             } else if (lhs_str == ".") {
                 if (args.nodes.size() == 1) {
                     // We're a closure call.
-                    return compile(args.nodes[0]);
+                    return compile(args.nodes[0], tail);
                 } else {
                     _check_binary(args);
                     auto lhs_slot = compile(args.nodes[0]);
@@ -389,7 +421,7 @@ struct block_compiler {
                 }
             } else if (lhs_str == "|>") {
                 _check_binary(args);
-                return _compile_pipe(args.nodes, meta);
+                return _compile_pipe(args.nodes, meta, tail);
             } else if (lhs_str == "fn") {
                 return _compile_anon_fn(args.nodes, meta);
             } else if (lhs_str == "%{}") {
@@ -423,7 +455,7 @@ struct block_compiler {
         for (auto& arg : args.nodes) {
             arg_slots.push_back(compile(arg));
         }
-        auto mfa_ret_slot = _try_compile_mfa(lhs, meta, arg_slots);
+        auto mfa_ret_slot = _try_compile_mfa(lhs, meta, arg_slots, tail);
         if (mfa_ret_slot) {
             return *mfa_ret_slot;
         }
@@ -432,13 +464,19 @@ struct block_compiler {
         auto arg_slot = consume_slot();
 
         auto fn_slot = compile(lhs);
-        builder.push_instr(is::call{fn_slot, arg_slot});
+        if (tail == tail_call::enable) {
+            builder.push_instr(is::tail{fn_slot, arg_slot});
+        } else {
+            builder.push_instr(is::call{fn_slot, arg_slot});
+        }
+
         return consume_slot();
     }
 
     std::optional<slot_ref_t> _try_compile_mfa(const ast::node& lhs,
                                                const ast::meta&,
-                                               const std::vector<slot_ref_t>& arg_slots) {
+                                               const std::vector<slot_ref_t>& arg_slots,
+                                               tail_call                      tail) {
         auto lhs_call = lhs.as_call();
         using std::nullopt;
         if (!lhs_call) {
@@ -464,7 +502,11 @@ struct block_compiler {
             // Not a valid dot expression, but we don't worry that here
             return nullopt;
         }
-        builder.push_instr(is::call_mfa{*modname, *fn_name, arg_slots});
+        if (tail == tail_call::enable) {
+            builder.push_instr(is::tail_mfa{*modname, *fn_name, arg_slots});
+        } else {
+            builder.push_instr(is::call_mfa{*modname, *fn_name, arg_slots});
+        }
         return consume_slot();
     }
 
@@ -494,7 +536,8 @@ struct block_compiler {
         return rhs_slot;
     }
 
-    slot_ref_t _compile_pipe(const std::vector<ast::node>& pipe_args, const ast::meta& meta) {
+    slot_ref_t
+    _compile_pipe(const std::vector<ast::node>& pipe_args, const ast::meta& meta, tail_call tail) {
         auto lhs_node = pipe_args[0];
         auto rhs_call = pipe_args[1].as_call();
         if (!rhs_call) {
@@ -508,11 +551,11 @@ struct block_compiler {
         new_args.insert(new_args.begin(), pipe_args[0]);
         auto new_ast
             = ast::call(rhs_call->target(), rhs_call->meta(), ast::list(std::move(new_args)));
-        return compile(new_ast);
+        return compile(new_ast, tail);
     }
 
-    slot_ref_t _compile_case(const std::vector<ast::node>& case_args, const ast::meta& meta) {
-        // TODO:  Replace all these asserts with real error handling
+    slot_ref_t
+    _compile_case(const std::vector<ast::node>& case_args, const ast::meta& meta, tail_call tail) {
         auto arg_check = [&](bool b) {
             if (!b) {
                 throw compile_error{"`case` expects one argument and a 'do' clause list", meta};
@@ -528,14 +571,14 @@ struct block_compiler {
         arg_check(kw_do && kw_do->string() == "do");
         auto rhs = pair->nodes[1].as_list();
         arg_check(!!rhs);
-        return _compile_branches(match_value_slot, *rhs);
+        return _compile_branches(match_value_slot, *rhs, meta, tail);
     }
 
     /**
      * `cond` is really just a special case of `case`.
      */
-    slot_ref_t _compile_cond(const std::vector<ast::node>& cond_args, const ast::meta& meta) {
-        // TODO:  Replace all these asserts with real error handling
+    slot_ref_t
+    _compile_cond(const std::vector<ast::node>& cond_args, const ast::meta& meta, tail_call tail) {
         auto arg_check = [&](bool b) {
             if (!b) {
                 throw compile_error{"`cond` expects a single 'do' clause list", meta};
@@ -551,23 +594,25 @@ struct block_compiler {
         auto rhs = pair->nodes[1].as_list();
         arg_check(!!rhs);
         auto true_value = compile(ast::symbol("true"));
-        return _compile_branches(true_value, *rhs);
+        return _compile_branches(true_value, *rhs, meta, tail);
     }
 
-    slot_ref_t _compile_branches(const slot_ref_t         match_slot,
-                                 const ast::list&         clause_list,
-                                 opt_ref<const ast::meta> meta = std::nullopt) {
+    slot_ref_t _compile_branches(const slot_ref_t match_slot,
+                                 const ast::list& clause_list,
+                                 const ast::meta& meta,
+                                 tail_call        tail) {
         // Create a binding slot where the result of the cond will go
         auto res_slot = current_end_slot;
         builder.push_instr(is::const_binding_slot{res_slot});
         consume_slot();
-        return _compile_branch_clauses(match_slot, res_slot, clause_list.nodes, meta);
+        return _compile_branch_clauses(match_slot, res_slot, clause_list.nodes, meta, tail);
     }
 
     slot_ref_t _compile_branch_clauses(slot_ref_t                    match_slot,
                                        slot_ref_t                    res_slot,
                                        const std::vector<ast::node>& clauses,
-                                       opt_ref<const ast::meta>      meta = std::nullopt) {
+                                       const ast::meta&              meta,
+                                       tail_call                     tail) {
         const auto                 rewind_to = current_end_slot;
         std::vector<inst_offset_t> exit_inst_offsets;
         std::vector<is::jump*>     exit_instrs;
@@ -581,7 +626,8 @@ struct block_compiler {
                 builder.push_instr(is::rewind{rewind_to});
                 current_end_slot = rewind_to;
             }
-            auto [false_jump_target_, end_jump] = _compile_branch_clause(match_slot, res_slot, n);
+            auto [false_jump_target_, end_jump]
+                = _compile_branch_clause(match_slot, res_slot, n, tail);
             exit_instrs.push_back(end_jump);
             prev_false_jump = false_jump_target_;
         }
@@ -590,10 +636,10 @@ struct block_compiler {
         prev_false_jump->target = current_instruction();
         builder.push_instr(is::rewind{rewind_to});
         current_end_slot = rewind_to;
-        if (meta && meta->fn_details()) {
+        if (meta.fn_details()) {
             // We're the tail of a function. We make a message based on the
             // meta details from the anonymous fn
-            auto& dets        = *meta->fn_details();
+            auto& dets        = *meta.fn_details();
             auto  fname_str   = dets.first + "." + dets.second;
             auto  fname_slot  = compile(ast::node(fname_str));
             auto  badarg_slot = compile("badarg"_sym);
@@ -615,8 +661,10 @@ struct block_compiler {
         return res_slot;
     }
 
-    std::pair<is::false_jump*, is::jump*>
-    _compile_branch_clause(slot_ref_t match_slot, slot_ref_t res_slot, const ast::node& n) {
+    std::pair<is::false_jump*, is::jump*> _compile_branch_clause(slot_ref_t       match_slot,
+                                                                 slot_ref_t       res_slot,
+                                                                 const ast::node& n,
+                                                                 tail_call        tail) {
         auto call = n.as_call();
         assert(call);
         auto arrow = call->target().as_symbol();
@@ -644,7 +692,7 @@ struct block_compiler {
         // Jump will be resolved later:
         auto fail_jump = &builder.push_instr(is::false_jump{invalid_inst});
         // Now compile our right-hand side
-        auto rhs_slot = compile(rhs);
+        auto rhs_slot = compile(rhs, tail);
         // Add an instruction to put the result of our RHS into the result slot
         builder.push_instr(is::hard_match{res_slot, rhs_slot});
         // Jump to the rewind trampoline
@@ -670,7 +718,7 @@ struct block_compiler {
     }
 
     void _do_find_closure_variables(ast::integer, capture_list&) {}
-    void _do_find_closure_variables(ast::floating, capture_list&) {}
+    void _do_find_closure_variables(ast::real, capture_list&) {}
     void _do_find_closure_variables(const ast::symbol&, capture_list&) {}
     void _do_find_closure_variables(const ast::string&, capture_list&) {}
     void _do_find_closure_variables(const ast::call& call, capture_list& dest) {
@@ -764,8 +812,11 @@ struct block_compiler {
             new_clauses.emplace_back(
                 ast::node(ast::call(symbol("->"), {}, ast::list(std::move(new_args)))));
         }
-        // Compile the code for the actual anon fn
-        return _compile_branches(arg_slot, ast::list(std::move(new_clauses)), meta);
+        // Compile the code for the actual anon fn. Enable TCO for the inner branches.
+        return _compile_branches(arg_slot,
+                                 ast::list(std::move(new_clauses)),
+                                 meta,
+                                 tail_call::enable);
     }
 
     /**
@@ -829,7 +880,7 @@ struct block_compiler {
      * ========================================================================
      */
 
-    slot_ref_t operator()(const ast::list& l) {
+    slot_ref_t operator()(const ast::list& l, tail_call) {
         // Yeah, the indentation is bad, but we have to do some careful checking
         // for a cons
         if (l.nodes.size() == 1) {
@@ -863,7 +914,7 @@ struct block_compiler {
     /**
      * Compile a tuple
      */
-    slot_ref_t operator()(const ast::tuple& tup) { return _compile_tuple(tup.nodes); }
+    slot_ref_t operator()(const ast::tuple& tup, tail_call) { return _compile_tuple(tup.nodes); }
 
     slot_ref_t operator()(const ast::tuple& t, expand_quoted) {
         std::vector<slot_ref_t> slots;
@@ -884,17 +935,17 @@ struct block_compiler {
      * DOES NOT expand any other macros. Those should have already been expanded
      * by another AST transformer.
      */
-    slot_ref_t operator()(const ast::call& call) {
+    slot_ref_t operator()(const ast::call& call, tail_call tail) {
         auto& args = call.arguments();
         if (auto arg_list_ptr = args.as_list()) {
             // We're given an argument list. A regular function call
-            return _compile_call(call.target(), call.meta(), *arg_list_ptr);
+            return _compile_call(call.target(), call.meta(), *arg_list_ptr, tail);
         } else {
             // We're a variable reference
             auto var_sym = call.target().as_symbol();
             if (!var_sym) {
                 // Var name should be a symbol
-                assert(false && "TODO: Compile error");
+                throw compile_error{"Invalid variable reference object", call.meta()};
             }
             auto var_slot = slot_for_variable(var_sym->string());
             if (var_slot) {
@@ -928,7 +979,7 @@ struct block_compiler {
     /**
      * Compile an integer literal. Simple.
      */
-    slot_ref_t operator()(ast::integer i, expand_quoted = {}) {
+    slot_ref_t operator()(ast::integer i, drop_argument) {
         builder.push_instr(is::const_int{i});
         return consume_slot();
     }
@@ -936,20 +987,23 @@ struct block_compiler {
     /**
      * Floating point
      */
-    slot_ref_t operator()(ast::floating, expand_quoted = {}) {
-        // TODO
-        return invalid_slot;
+    slot_ref_t operator()(ast::real r, drop_argument) {
+        builder.push_instr(is::const_real{r});
+        return consume_slot();
     }
 
     /**
      * Symbols
      */
-    slot_ref_t operator()(const ast::symbol& s, expand_quoted = {}) {
+    slot_ref_t operator()(const ast::symbol& s, drop_argument) {
         builder.push_instr(is::const_symbol{s});
         return consume_slot();
     }
 
-    slot_ref_t operator()(const ast::string& s, expand_quoted = {}) {
+    /**
+     * Strings
+     */
+    slot_ref_t operator()(const ast::string& s, drop_argument) {
         builder.push_instr(is::const_str{s});
         return consume_slot();
     }

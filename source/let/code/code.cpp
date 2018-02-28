@@ -35,8 +35,21 @@ struct code_ostream_visitor {
 
     void operator()(is::ret r) { o << std::setw(13) << "ret  " << r.slot; }
     void operator()(is::call c) { o << std::setw(13) << "call  " << c.fn << ", " << c.arg; }
+    void operator()(is::tail t) { o << std::setw(13) << "tail  " << t.fn << ", " << t.arg; }
     void operator()(is::call_mfa c) {
         o << std::setw(13) << "call_mfa  " << c.module.string() << "." << c.fn.string() << "(";
+        auto arg_iter = c.args.begin();
+        auto arg_end  = c.args.end();
+        while (arg_iter != arg_end) {
+            o << *arg_iter++;
+            if (arg_iter != arg_end) {
+                o << ", ";
+            }
+        }
+        o << ')';
+    }
+    void operator()(is::tail_mfa c) {
+        o << std::setw(13) << "tail_mfa  " << c.module.string() << "." << c.fn.string() << "(";
         auto arg_iter = c.args.begin();
         auto arg_end  = c.args.end();
         while (arg_iter != arg_end) {
@@ -50,6 +63,7 @@ struct code_ostream_visitor {
     void operator()(is::add a) { o << std::setw(13) << "add  " << a.a << ", " << a.b; }
     void operator()(is::sub s) { o << std::setw(13) << "sub  " << s.a << ", " << s.b; }
     void operator()(is::mul m) { o << std::setw(13) << "mul  " << m.a << ", " << m.b; }
+    void operator()(is::div d) { o << std::setw(13) << "div  " << d.a << ", " << d.b; }
     void operator()(is::mk_cons c) { o << std::setw(13) << "mk_cons  " << c.lhs << ", " << c.rhs; }
     void operator()(is::push_front c) {
         o << std::setw(13) << "push_front  " << c.elem << ", " << c.list;
@@ -57,13 +71,13 @@ struct code_ostream_visitor {
     void operator()(is::eq e) { o << std::setw(13) << "eq  " << e.a << ", " << e.b; }
     void operator()(is::neq e) { o << std::setw(13) << "neq  " << e.a << ", " << e.b; }
     void operator()(is::const_int i) { o << std::setw(13) << "const_int  " << i.value; }
+    void operator()(is::const_real r) { o << std::setw(13) << "const_real  " << r.value; }
     void operator()(is::const_symbol sym) {
         o << std::setw(13) << "const_sym  " << '"' << sym.sym << '"';
     }
     void operator()(const is::const_str& str) {
         o << std::setw(13) << "const_str  " << '"' << str.string << '"';
     }
-    void operator()(is::const_double d) { o << std::setw(13) << "const_double  " << d.value; }
     void operator()(is::hard_match m) {
         o << std::setw(13) << "hard_match  " << m.lhs << ", " << m.rhs;
     }

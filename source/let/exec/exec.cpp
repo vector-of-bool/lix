@@ -95,6 +95,9 @@ public:
     }
 
     void push_frame(code::code c, code::iterator inst) { _call_frames.emplace_back(c, inst); }
+    void replace_frame(code::code c, code::iterator inst) {
+        _call_frames.back() = exec_frame(c, inst);
+    }
 
     void push(value&& el) { _top_frame().push(std::move(el)); }
     void push(const value& el) { _top_frame().push(el); }
@@ -149,32 +152,42 @@ struct exec_visitor {
     }
 
     void execute(is::const_int i) { ex.push(i.value); }
-    void execute(is::const_double d) { ex.push(d.value); }
+    void execute(is::const_real d) { ex.push(d.value); }
     void execute(is::const_symbol sym) { ex.push(let::symbol{sym.sym}); }
     void execute(const is::const_str& str) { ex.push(let::string{str.string}); }
     void execute(is::const_binding_slot s) { ex.push(binding_slot{s.slot}); }
 
     void execute(is::ret r) { ex.pop_frame_return(r.slot); }
 
-    void execute(is::call c) {
-        auto& callee = ex.nth(c.fn);
-        if (auto closure = callee.as_closure()) {
-            auto arg = ex.nth(c.arg);
-            ex.push_frame(closure->code(), closure->code_begin());
-            // Push the values it has captured
-            for (auto& el : closure->captures()) {
-                ex.push(el);
-            }
-            ex.push(std::move(arg));
-        } else if (auto fn = callee.as_function()) {
-            ex.push(_call_ll(*fn, ex.nth(c.arg)));
+    void _call_closure(const exec::closure& closure, const let::value& arg_tup, bool is_tail) {
+        if (is_tail) {
+            ex.replace_frame(closure.code(), closure.code_begin());
         } else {
-            assert(false && "Call to non-function");
-            std::terminate();
+            ex.push_frame(closure.code(), closure.code_begin());
         }
+        for (auto& el : closure.captures()) {
+            ex.push(el);
+        }
+        ex.push(std::move(arg_tup));
     }
 
-    void execute(is::call_mfa c) {
+    template <typename CallInstr>
+    void _dyn_call(const CallInstr& c, bool is_tail) {
+        auto& callee = ex.nth(c.fn);
+        auto arg = ex.nth(c.arg);
+        if (auto closure = callee.as_closure()) {
+            _call_closure(*closure, arg, is_tail);
+        } else if (auto fn = callee.as_function()) {
+            ex.push(_call_ll(*fn, arg));
+        } else {
+            _raise_tuple("badcall"_sym, callee);
+        }
+    }
+    void execute(is::call c) { _dyn_call(c, false); }
+    void execute(is::tail c) { _dyn_call(c, true); }
+
+    template <typename CallInstr>
+    void _mfa_call(const CallInstr& c, bool is_tail) {
         std::vector<let::value> vals;
         for (auto slot : c.args) {
             vals.push_back(ex.nth(slot));
@@ -189,11 +202,7 @@ struct exec_visitor {
             _raise_tuple("undefined"_sym, c.module, c.fn);
         }
         if (auto closure = std::get_if<let::exec::closure>(&*fun)) {
-            ex.push_frame(closure->code(), closure->code_begin());
-            for (auto& el : closure->captures()) {
-                ex.push(el);
-            }
-            ex.push(std::move(tup));
+            _call_closure(*closure, tup, is_tail);
         } else if (auto native_fn = std::get_if<let::exec::function>(&*fun)) {
             ex.push(_call_ll(*native_fn, tup));
         } else {
@@ -201,6 +210,9 @@ struct exec_visitor {
             std::terminate();
         }
     }
+
+    void execute(const is::call_mfa& c) { _mfa_call(c, false); }
+    void execute(const is::tail_mfa& t) { _mfa_call(t, true); }
 
     void execute(is::jump j) { ex.jump(j.target); }
 
@@ -217,16 +229,36 @@ struct exec_visitor {
 
     void execute(is::rewind r) { ex.rewind(r.slot); }
 
-    void execute(is::add add) {
-        auto& lhs = ex.nth(add.a);
-        auto& rhs = ex.nth(add.b);
+    template <typename BinOp>
+    bool _try_arith(BinOp op, const let::value& lhs, const let::value& rhs) {
         if (auto l_int = lhs.as_integer()) {
-            auto r_int = rhs.as_integer();
-            if (!r_int) {
-                _raise_tuple("einval"_sym, "+"_sym, lhs, rhs);
+            if (auto r_int = rhs.as_integer()) {
+                ex.push(op(*l_int, *r_int));
+            } else if (auto r_real = rhs.as_real()) {
+                ex.push(op(*l_int, *r_real));
+            } else {
+                return false;
             }
-            ex.push(*l_int + *r_int);
-        } else if (auto l_str = lhs.as_string()) {
+        } else if (auto l_real = lhs.as_real()) {
+            if (auto r_real = rhs.as_real()) {
+                ex.push(op(*l_real, *r_real));
+            } else if (auto r_int = rhs.as_integer()) {
+                ex.push(op(*l_real, *r_int));
+            } else {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    void execute(is::add add) {
+        auto& lhs       = ex.nth(add.a);
+        auto& rhs       = ex.nth(add.b);
+        auto  did_arith = _try_arith(std::plus<>{}, lhs, rhs);
+        if (did_arith) {
+            return;
+        }
+        if (auto l_str = lhs.as_string()) {
             auto r_str = rhs.as_string();
             if (!r_str) {
                 _raise_tuple("einval"_sym, "+"_sym, lhs, rhs);
@@ -237,26 +269,28 @@ struct exec_visitor {
         }
     }
 
-    void execute(is::mul mul) {
-        auto& lhs = ex.nth(mul.a);
-        auto& rhs = ex.nth(mul.b);
-        if (auto l_int = lhs.as_integer()) {
-            auto r_int = rhs.as_integer();
-            if (!r_int) {
-                let::raise(
-                    let::tuple::make("einval"_sym, "multiply"_sym, let::tuple::make(lhs, rhs)));
-            }
-            ex.push(*l_int * *r_int);
-        } else {
-            let::raise(let::tuple::make("einval"_sym, "multiply"_sym, let::tuple::make(lhs, rhs)));
+    void execute(is::sub sub) {
+        auto& lhs = ex.nth(sub.a);
+        auto& rhs = ex.nth(sub.b);
+        if (!_try_arith(std::minus<>{}, lhs, rhs)) {
+            _raise_tuple("einval"_sym, "-"_sym, lhs, rhs);
         }
     }
 
-    void execute(is::sub sub) {
-        auto lhs = ex.nth(sub.a).as_integer();
-        auto rhs = ex.nth(sub.b).as_integer();
-        // TODO: Check for nullptr;
-        ex.push(*lhs - *rhs);
+    void execute(is::mul mul) {
+        auto& lhs = ex.nth(mul.a);
+        auto& rhs = ex.nth(mul.b);
+        if (!_try_arith(std::multiplies<>{}, lhs, rhs)) {
+            _raise_tuple("einval"_sym, "*"_sym, lhs, rhs);
+        }
+    }
+
+    void execute(is::div div) {
+        auto& lhs = ex.nth(div.a);
+        auto& rhs = ex.nth(div.b);
+        if (!_try_arith(std::divides<>{}, lhs, rhs)) {
+            _raise_tuple("einval"_sym, "/"_sym, lhs, rhs);
+        }
     }
 
     void execute(is::eq eq) {
@@ -439,7 +473,7 @@ struct exec_visitor {
         let::map map;
         for (auto slot : m.slots) {
             auto& pair = ex.nth(slot);
-            auto tup  = pair.as_tuple();
+            auto  tup  = pair.as_tuple();
             if (!tup && tup->size() != 2) {
                 _raise_tuple("badarg"_sym, "%{}", pair);
             }
@@ -488,7 +522,7 @@ struct exec_visitor {
         } else if (auto lhs_box = lhs.as_boxed()) {
             _dot_boxed(*lhs_box, rhs->string());
         } else {
-            assert(false && "Unhandled dot operator case");
+            _raise_tuple("einval"_sym, "."_sym, lhs);
         }
     }
     void execute(is::is_list i) {

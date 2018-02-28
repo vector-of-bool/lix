@@ -44,7 +44,7 @@ struct macro_expander {
     }
 
     node operator()(ast::integer i) { return node(i); }
-    node operator()(ast::floating f) { return node(f); }
+    node operator()(ast::real f) { return node(f); }
     node operator()(const ast::symbol& s) {
         for (auto& alias : aliases) {
             if (s.string().find(alias.alias) == 0) {
@@ -165,7 +165,7 @@ struct ast_escaper {
         }
     }
     node operator()(ast::integer i) { return node(i); }
-    node operator()(ast::floating f) { return node(f); }
+    node operator()(ast::real f) { return node(f); }
     node operator()(const ast::symbol& s) { return node(s); }
     node operator()(const ast::string& s) { return node(s); }
 

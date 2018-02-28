@@ -41,7 +41,7 @@ struct ostream_node_visitor {
         o << '}';
     }
     void operator()(integer i) const { o << i; }
-    void operator()(floating f) const { o << f; }
+    void operator()(real f) const { o << f; }
     void operator()(const symbol& s) const { o << s; }
     void operator()(const string& s) const { o << '\'' << s << '\''; }
     void operator()(const call& c) const {
@@ -116,7 +116,7 @@ struct to_value_converter {
         return let::tuple(std::move(vals));
     }
     value operator()(ast::integer i) { return i; }
-    value operator()(ast::floating f) { return f; }
+    value operator()(ast::real f) { return f; }
     value operator()(const ast::symbol& s) { return s; }
     value operator()(const ast::string& s) { return s; }
     value operator()(const ast::call& c) {

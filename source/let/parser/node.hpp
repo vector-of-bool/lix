@@ -34,16 +34,16 @@ struct tuple {
         : nodes(std::move(ns)) {}
 };
 
-using integer  = std::int64_t;
-using floating = double;
-using symbol   = let::symbol;
-using string   = let::string;
+using integer = std::int64_t;
+using real    = double;
+using symbol  = let::symbol;
+using string  = let::string;
 
 class meta {
     std::optional<std::pair<string, string>> _fn_details;
     // File location details:
-    int                                      _line   = -1;
-    int                                      _column = -1;
+    int _line   = -1;
+    int _column = -1;
 
 public:
     meta() = default;
@@ -73,7 +73,7 @@ public:
 };
 
 class node {
-    using node_var = std::variant<list, tuple, integer, floating, symbol, string, call>;
+    using node_var = std::variant<list, tuple, integer, real, symbol, string, call>;
     std::shared_ptr<const node_var> _var;
 
 public:
@@ -83,7 +83,7 @@ public:
         : _var(std::make_unique<node_var>(std::move(t))) {}
     explicit node(integer i)
         : _var(std::make_unique<node_var>(std::move(i))) {}
-    explicit node(floating f)
+    explicit node(real f)
         : _var(std::make_unique<node_var>(std::move(f))) {}
     node(symbol s)
         : _var(std::make_unique<node_var>(std::move(s))) {}
@@ -106,7 +106,7 @@ public:
     DEF_OBS(list);
     DEF_OBS(tuple);
     DEF_OBS(integer);
-    DEF_OBS(floating);
+    DEF_OBS(real);
     DEF_OBS(symbol);
     DEF_OBS(string);
     DEF_OBS(call);

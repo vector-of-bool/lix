@@ -20,6 +20,10 @@ struct call {
     slot_ref_t fn;
     slot_ref_t arg;
 };
+struct tail {
+    slot_ref_t fn;
+    slot_ref_t arg;
+};
 struct add {
     slot_ref_t a;
     slot_ref_t b;
@@ -29,6 +33,10 @@ struct sub {
     slot_ref_t b;
 };
 struct mul {
+    slot_ref_t a;
+    slot_ref_t b;
+};
+struct div {
     slot_ref_t a;
     slot_ref_t b;
 };
@@ -43,7 +51,7 @@ struct neq {
 struct const_int {
     std::int64_t value;
 };
-struct const_double {
+struct const_real {
     double value;
 };
 struct const_symbol {
@@ -140,8 +148,13 @@ struct frame_id {
     std::string id;
 };
 struct call_mfa {
-    let::symbol module;
-    let::symbol fn;
+    let::symbol             module;
+    let::symbol             fn;
+    std::vector<slot_ref_t> args;
+};
+struct tail_mfa {
+    let::symbol             module;
+    let::symbol             fn;
     std::vector<slot_ref_t> args;
 };
 struct debug {};
@@ -164,16 +177,19 @@ struct raise {
     slot_ref_t arg;
 };
 
-
 using any_var = std::variant<ret,
                              call,
+                             tail,
                              call_mfa,
+                             tail_mfa,
                              add,
                              sub,
                              mul,
+                             div,
                              eq,
                              neq,
                              const_int,
+                             const_real,
                              const_symbol,
                              const_str,
                              hard_match,

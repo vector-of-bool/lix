@@ -501,7 +501,7 @@ SET_ERROR_MESSAGE(lit_int, "Expected integer literal");
 /**
  * We parse floats simply by looking for a decimal number, a dot, then another decimal
  */
-struct lit_float : seq<lit_dec_int, one<'.'>, plus<lit_dec_int>> {};
+struct lit_real : seq<lit_dec_int, one<'.'>, plus<lit_dec_int>> {};
 
 struct meta_prep_arglist : success {};
 ACTION(meta_prep_arglist) {
@@ -547,7 +547,7 @@ ACTION(keyword_arg) {
 /**
  * A `lit_number' is just a float or an int
  */
-struct lit_number : sor<lit_float, lit_int> {};
+struct lit_number : sor<lit_real, lit_int> {};
 
 struct lit_tuple_elem : sor<single_ex> {};
 ACTION(lit_tuple_elem) {
@@ -1342,7 +1342,7 @@ ACTION(lit_int) {
         throw det_parser_error(in.position(), "Integer value is too large");
     }
 }
-ACTION(lit_float) { st.push(node(floating(std::stod(in.string())))); }
+ACTION(lit_real) { st.push(node(real(std::stod(in.string())))); }
 // Action for keyword blocks. This will append the keyword argument for the
 // block to the current keyword list at the top of the stack.
 template <typename Keyword>
