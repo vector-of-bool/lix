@@ -9,21 +9,6 @@ else()
     target_compile_options(lix-base PUBLIC /std:c++latest)
 endif()
 
-find_program(
-    AFL_AS afl-as HINTS "${PROJECT_BINARY_DIR}/afl"
-    PATH_SUFFIXES afl-2.52b
-    )
-
-message(STATUS "AFL assembler: ${AFL_AS}")
-
-if(AFL_AS)
-    get_filename_component(afl_prefix "${AFL_AS}" DIRECTORY)
-    target_compile_options(lix-base INTERFACE
-        "$<$<CONFIG:Debug>:-B${afl_prefix}/>"
-        "$<$<CONFIG:RelWithDebInfo>:-B${afl_prefix}/>"
-        )
-endif()
-
 get_filename_component(gen_dir "${CMAKE_CURRENT_BINARY_DIR}/gen" ABSOLUTE)
 get_filename_component(hpp_in lix/libs/mod_template.hpp.in ABSOLUTE)
 get_filename_component(cpp_in lix/libs/mod_template.cpp.in ABSOLUTE)
