@@ -5,6 +5,7 @@
 
 TEST_CASE("Create a context with libraries") {
     auto ctx = let::libs::create_context<let::libs::Enum,
+                                         let::libs::Map,
                                          let::libs::String,
                                          let::libs::IO,
                                          let::libs::Regex,
@@ -55,6 +56,11 @@ TEST_CASE("Create a context with libraries") {
         2 = Enum.find([1, 2, 3, 4], &(&1 * 2 == 4))
 
         {[:a, :b, :c], [1, 2, 3]} = Enum.unzip(a: 1, b: 2, c: 3)
+
+        mymap = %{foo: 12}
+        {:ok, 12} = Map.fetch(mymap, :foo)
+        12 = Map.fetch!(mymap, :foo)
+        {12, newmap} = Map.pop(mymap, :foo)
 
         IO.puts("Hello, Mike")
     )code",

@@ -122,7 +122,7 @@ struct map_impl {
         return _insert_at(path, key, value);
     }
 
-    std::pair<let::value, map_impl> pop(const key_type& key) const {
+    std::optional<std::pair<let::value, map_impl>> pop(const key_type& key) const {
         path_type path{key, _root};
         if (auto leaf = path.leaf()) {
             auto existing_idx = leaf->index_of(key);
@@ -136,10 +136,10 @@ struct map_impl {
                 new_leaf.release();
                 auto new_root = path.rewrite(new_branch.get());
                 new_branch.release();
-                return {entry.value(), map_impl(new_root, _size - 1)};
+                return std::pair(entry.value(), map_impl(new_root, _size - 1));
             }
         }
-        throw std::runtime_error{"erase() of non-existent map key"};
+        return std::nullopt;
     }
 
     opt_ref<const let::value> find(const key_type& key) const {
@@ -172,11 +172,18 @@ map map::insert_or_update(const let::value& key, const let::value& val) const {
     return _impl->insert_or_update(key, val);
 }
 
-std::pair<let::value, map> map::pop(const let::value& key) const {
+std::optional<std::pair<let::value, let::map>> map::pop(const let::value& key) const {
     auto pair = _impl->pop(key);
-    return {move(pair.first), map(move(pair.second))};
+    if (pair) {
+        return std::pair(move(pair->first), map(move(pair->second)));
+    } else {
+        return std::nullopt;
+    }
 }
 
 opt_ref<const value> map::find(const let::value& key) const { return _impl->find(key); }
 
-std::ostream& let::operator<<(std::ostream& o, const let::map& map) { o << "%{[map]}"; }
+std::ostream& let::operator<<(std::ostream& o, const let::map&) {
+    o << "%{[map]}";
+    return o;
+}

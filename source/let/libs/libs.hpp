@@ -8,6 +8,7 @@
 #include <let/libs/File.hpp>
 #include <let/libs/IO.hpp>
 #include <let/libs/Keyword.hpp>
+#include <let/libs/Map.hpp>
 #include <let/libs/Path.hpp>
 #include <let/libs/Regex.hpp>
 #include <let/libs/String.hpp>

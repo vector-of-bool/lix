@@ -121,7 +121,9 @@ TEST_CASE("Map basics") {
     ref = m.find("foo"_sym);
     REQUIRE(ref);
     CHECK(*ref == 42);
-    auto [old_val, new_map] = m.pop("foo"_sym);
+    auto pair_opt = m.pop("foo"_sym);
+    REQUIRE(pair_opt);
+    auto [old_val, new_map] = *pair_opt;
     m                       = new_map;
     ref                     = m.find("foo"_sym);
     CHECK_FALSE(ref);

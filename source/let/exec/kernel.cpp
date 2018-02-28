@@ -5,6 +5,7 @@
 #include <let/exec/module.hpp>
 
 #include <let/util/args.hpp>
+#include <let/util/wrap_fn.hpp>
 
 #include <algorithm>
 
@@ -61,7 +62,7 @@ struct function_final_pass {
     ast::node do_final_pass(ast::integer i, const std::string&, const function_accumulator&) {
         return ast::node(i);
     }
-    ast::node do_final_pass(ast::floating i, const std::string&, const function_accumulator&) {
+    ast::node do_final_pass(ast::real i, const std::string&, const function_accumulator&) {
         return ast::node(i);
     }
     ast::node do_final_pass(const ast::symbol& s, const std::string&, const function_accumulator&) {
@@ -306,21 +307,46 @@ let::value k_reverse_list(exec::context&, const let::value& v) {
                      std::make_move_iterator(new_list.end()));
 }
 
-module build_kernel_module() {
-    module ret;
-    ret.add_macro("defmodule", &defmodule_macro);
-    ret.add_macro("def", &def_macro);
-    ret.add_function("__reverse_list", &k_reverse_list);
-    return ret;
-}
-
 const module& bootstrap_module() {
     static auto mod = build_bootstrap_module();
     return mod;
 }
 
 const module& kernel_module() {
-    static auto mod = build_kernel_module();
+    static auto mod = [] {
+        module mod;
+        mod.add_macro("defmodule", &defmodule_macro);
+        mod.add_macro("def", &def_macro);
+        mod.add_function("__reverse_list", &k_reverse_list);
+        mod.add_function("__map_pop",
+                         let::wrap_function([](const let::map&   map,
+                                               const let::value& key,
+                                               const let::value& def) -> let::value {
+                             auto pair_opt = map.pop(key);
+                             if (!pair_opt) {
+                                 return let::tuple::make(def, map);
+                             } else {
+                                 return let::tuple::make(pair_opt->first, pair_opt->second);
+                             }
+                         }));
+        mod.add_function("__map_put",
+                         let::wrap_function([](const let::map&   map,
+                                               const let::value& key,
+                                               const let::value& val) -> let::value {
+                             return map.insert_or_update(key, val);
+                         }));
+        mod.add_function("__map_fetch",
+                         let::wrap_function(
+                             [](const let::map& map, const let::value& key) -> let::value {
+                                 auto found = map.find(key);
+                                 if (found) {
+                                     return let::tuple::make("ok"_sym, *found);
+                                 } else {
+                                     return "error"_sym;
+                                 }
+                             }));
+        return mod;
+    }();
     return mod;
 }
 

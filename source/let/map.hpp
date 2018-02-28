@@ -2,8 +2,8 @@
 #define LET_MAP_HPP_INCLUDED
 
 #include <memory>
-#include <utility>
 #include <ostream>
+#include <utility>
 
 #include <let/util/opt_ref.hpp>
 #include <let/value_fwd.hpp>
@@ -36,8 +36,8 @@ public:
 
     [[nodiscard]] map insert(const let::value&, const let::value&) const;
     [[nodiscard]] map insert_or_update(const let::value&, const let::value&) const;
-    [[nodiscard]] std::pair<let::value, map> pop(const let::value&) const;
-    [[nodiscard]] opt_ref<const let::value>  find(const let::value&) const;
+    [[nodiscard]] std::optional<std::pair<let::value, map>> pop(const let::value&) const;
+    [[nodiscard]] opt_ref<const let::value>                 find(const let::value&) const;
 };
 
 std::ostream& operator<<(std::ostream& o, const map& l);

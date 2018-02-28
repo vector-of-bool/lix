@@ -42,11 +42,23 @@ const let::list& unpack_one(const let::tuple& input, tag<let::list>) {
     if (input.size() <= I) {
         throw std::runtime_error{"Not enough arguments to unpack"};
     }
-    auto sym_ptr = input[I].as_list();
-    if (!sym_ptr) {
+    auto list_ptr = input[I].as_list();
+    if (!list_ptr) {
         throw std::runtime_error{"Argument is not a list"};
     }
-    return *sym_ptr;
+    return *list_ptr;
+}
+
+template <std::size_t I>
+const let::map& unpack_one(const let::tuple& input, tag<let::map>) {
+    if (input.size() <= I) {
+        throw std::runtime_error{"Not enough arguments to unpack"};
+    }
+    auto map_ptr = input[I].as_map();
+    if (!map_ptr) {
+        throw std::runtime_error{"Argument is not a map"};
+    }
+    return *map_ptr;
 }
 
 template <std::size_t I>
