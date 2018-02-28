@@ -1,35 +1,35 @@
 #include <catch/catch.hpp>
 
-#include <let/compiler/compile.hpp>
-#include <let/compiler/macro.hpp>
-#include <let/exec/context.hpp>
-#include <let/exec/exec.hpp>
-#include <let/exec/kernel.hpp>
-#include <let/parser/node.hpp>
-#include <let/parser/parse.hpp>
+#include <lix/compiler/compile.hpp>
+#include <lix/compiler/macro.hpp>
+#include <lix/exec/context.hpp>
+#include <lix/exec/exec.hpp>
+#include <lix/exec/kernel.hpp>
+#include <lix/parser/node.hpp>
+#include <lix/parser/parse.hpp>
 
-using namespace let;
+using namespace lix;
 
 TEST_CASE("Compile a simple expression") {
     ast::list args;
     args.nodes.emplace_back(integer(2));
     args.nodes.emplace_back(integer(2));
     ast::node root = ast::call(symbol("+"), {}, std::move(args));
-    CHECK_NOTHROW(let::compile(root));
-    auto block = let::compile(root);
+    CHECK_NOTHROW(lix::compile(root));
+    auto block = lix::compile(root);
     // Should compile to four instructions:
     CHECK(block.size() == 4);
     // Try to run it
-    let::exec::executor ex{block};
-    let::exec::context  ctx;
+    lix::exec::executor ex{block};
+    lix::exec::context  ctx;
     ex.execute_n(ctx, 3);
 }
 
 TEST_CASE("Compile from a string") {
-    auto                ast   = let::ast::parse("4 + 5");
-    auto                block = let::compile(ast);
-    let::exec::executor ex{block};
-    let::exec::context  ctx;
+    auto                ast   = lix::ast::parse("4 + 5");
+    auto                block = lix::compile(ast);
+    lix::exec::executor ex{block};
+    lix::exec::context  ctx;
     auto                ret = ex.execute_n(ctx, 3000);
     REQUIRE(ret);
     REQUIRE(ret->as_integer());
@@ -47,8 +47,8 @@ TEST_CASE("Expand some macros") {
             end
         end
     )";
-    REQUIRE_NOTHROW(let::ast::parse(code));
-    auto in_ast   = let::ast::parse(code);
-    auto ctx      = let::exec::build_kernel_context();
-    auto expanded = let::expand_macros(ctx, in_ast);
+    REQUIRE_NOTHROW(lix::ast::parse(code));
+    auto in_ast   = lix::ast::parse(code);
+    auto ctx      = lix::exec::build_kernel_context();
+    auto expanded = lix::expand_macros(ctx, in_ast);
 }

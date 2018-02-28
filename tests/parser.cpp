@@ -1,4 +1,4 @@
-#include <let/parser.hpp>
+#include <lix/parser.hpp>
 
 #include <catch/catch.hpp>
 
@@ -119,13 +119,13 @@ TEST_CASE("Parse a simple literal", "[parser]") {
     for (auto [code, canon] : pairs) {
         INFO(code);
         try {
-            auto node = let::ast::parse(code);
+            auto node = lix::ast::parse(code);
             CHECK(to_string(node) == canon);
-        } catch (const let::ast::parse_error& e) {
+        } catch (const lix::ast::parse_error& e) {
             INFO(e.what());
             REQUIRE(false);
         }
     }
-    // CHECK_THROWS(let::ast::parse("foo("));
-    // let::ast::parse("foo + bar");
+    // CHECK_THROWS(lix::ast::parse("foo("));
+    // lix::ast::parse("foo + bar");
 }

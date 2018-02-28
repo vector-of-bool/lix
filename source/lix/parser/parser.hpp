@@ -1,0 +1,6 @@
+#ifndef LIX_PARSER_PARSER_HPP_INCLUDED
+#define LIX_PARSER_PARSER_HPP_INCLUDED
+
+#include "parse.hpp"
+
+#endif // LIX_PARSER_PARSER_HPP_INCLUDED

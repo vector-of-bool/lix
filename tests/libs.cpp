@@ -1,20 +1,20 @@
 #include <catch/catch.hpp>
 
-#include <let/eval.hpp>
-#include <let/libs/libs.hpp>
+#include <lix/eval.hpp>
+#include <lix/libs/libs.hpp>
 
 TEST_CASE("Create a context with libraries") {
-    auto ctx = let::libs::create_context<let::libs::Enum,
-                                         let::libs::Map,
-                                         let::libs::String,
-                                         let::libs::IO,
-                                         let::libs::Regex,
-                                         let::libs::Keyword,
-                                         let::libs::File>();
-    auto val = let::eval("[3, 4, 5, 6] = Enum.map([1, 2, 3, 4], fn v -> v + 2 end); :ok", ctx);
-    CHECK(val == let::symbol("ok"));
+    auto ctx = lix::libs::create_context<lix::libs::Enum,
+                                         lix::libs::Map,
+                                         lix::libs::String,
+                                         lix::libs::IO,
+                                         lix::libs::Regex,
+                                         lix::libs::Keyword,
+                                         lix::libs::File>();
+    auto val = lix::eval("[3, 4, 5, 6] = Enum.map([1, 2, 3, 4], fn v -> v + 2 end); :ok", ctx);
+    CHECK(val == lix::symbol("ok"));
 
-    val = let::eval(R"code(
+    val = lix::eval(R"code(
         [3, 3, 3] = Enum.filter([1, 2, 3, 2, 5, 8, 3, 4, 3], fn
             3 -> true
             _ -> false

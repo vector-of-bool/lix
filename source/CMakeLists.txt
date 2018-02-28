@@ -1,12 +1,12 @@
-add_library(let-base INTERFACE)
-target_compile_features(let-base INTERFACE cxx_std_17)
-target_include_directories(let-base INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
-add_library(let::base ALIAS let-base)
+add_library(lix-base INTERFACE)
+target_compile_features(lix-base INTERFACE cxx_std_17)
+target_include_directories(lix-base INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
+add_library(lix::base ALIAS lix-base)
 if(NOT MSVC)
-    target_compile_options(let-base INTERFACE -Wall -Wextra -Wpedantic)
-    target_link_libraries(let-base INTERFACE stdc++fs)
+    target_compile_options(lix-base INTERFACE -Wall -Wextra -Wpedantic)
+    target_link_libraries(lix-base INTERFACE stdc++fs)
 else()
-    target_compile_options(let-base PUBLIC /std:c++latest)
+    target_compile_options(lix-base PUBLIC /std:c++latest)
 endif()
 
 find_program(
@@ -18,21 +18,21 @@ message(STATUS "AFL assembler: ${AFL_AS}")
 
 if(AFL_AS)
     get_filename_component(afl_prefix "${AFL_AS}" DIRECTORY)
-    target_compile_options(let-base INTERFACE
+    target_compile_options(lix-base INTERFACE
         "$<$<CONFIG:Debug>:-B${afl_prefix}/>"
         "$<$<CONFIG:RelWithDebInfo>:-B${afl_prefix}/>"
         )
 endif()
 
 get_filename_component(gen_dir "${CMAKE_CURRENT_BINARY_DIR}/gen" ABSOLUTE)
-get_filename_component(hpp_in let/libs/mod_template.hpp.in ABSOLUTE)
-get_filename_component(cpp_in let/libs/mod_template.cpp.in ABSOLUTE)
+get_filename_component(hpp_in lix/libs/mod_template.hpp.in ABSOLUTE)
+get_filename_component(cpp_in lix/libs/mod_template.cpp.in ABSOLUTE)
 get_filename_component(gen_script gen-lib.cmake ABSOLUTE)
 set(gen_lib_sources)
 foreach(libname IO Enum Path File String Regex Keyword Map)
-    get_filename_component(gen_header "${gen_dir}/let/libs/${libname}.hpp" ABSOLUTE)
-    get_filename_component(gen_source "${gen_dir}/let/libs/${libname}.cpp" ABSOLUTE)
-    get_filename_component(in_mod let/libs/${libname}.let ABSOLUTE)
+    get_filename_component(gen_header "${gen_dir}/lix/libs/${libname}.hpp" ABSOLUTE)
+    get_filename_component(gen_source "${gen_dir}/lix/libs/${libname}.cpp" ABSOLUTE)
+    get_filename_component(in_mod lix/libs/${libname}.lix ABSOLUTE)
     set(more_deps)
     if(EXISTS "${in_mod}.extra.cpp")
         set(more_deps "${in_mod}.extra.cpp")
@@ -53,91 +53,91 @@ foreach(libname IO Enum Path File String Regex Keyword Map)
     list(APPEND gen_lib_sources "${gen_header}" "${gen_source}")
 endforeach()
 
-add_library(let STATIC
-    let/parser/parser.hpp
-    let/parser/parser.cpp
-    let/parser/parse.hpp
-    let/parser/parse.cpp
-    let/parser/node.hpp
-    let/parser/node.cpp
+add_library(lix STATIC
+    lix/parser/parser.hpp
+    lix/parser/parser.cpp
+    lix/parser/parse.hpp
+    lix/parser/parse.cpp
+    lix/parser/node.hpp
+    lix/parser/node.cpp
 
-    let/list.hpp
-    let/list.cpp
-    let/tuple.hpp
-    let/tuple.cpp
-    let/exec/context.hpp
-    let/exec/context.cpp
-    let/exec/module.hpp
-    let/exec/module.cpp
-    let/exec/fn.hpp
-    let/exec/fn.cpp
-    let/exec/stack.hpp
-    let/exec/stack.cpp
-    let/exec/kernel.hpp
-    let/exec/kernel.cpp
-    let/exec/closure.cpp
-    let/exec/closure.cpp
-    let/exec/exec.hpp
-    let/exec/exec.cpp
+    lix/list.hpp
+    lix/list.cpp
+    lix/tuple.hpp
+    lix/tuple.cpp
+    lix/exec/context.hpp
+    lix/exec/context.cpp
+    lix/exec/module.hpp
+    lix/exec/module.cpp
+    lix/exec/fn.hpp
+    lix/exec/fn.cpp
+    lix/exec/stack.hpp
+    lix/exec/stack.cpp
+    lix/exec/kernel.hpp
+    lix/exec/kernel.cpp
+    lix/exec/closure.cpp
+    lix/exec/closure.cpp
+    lix/exec/exec.hpp
+    lix/exec/exec.cpp
 
-    let/code/builder.hpp
-    let/code/builder.cpp
-    let/code/code.hpp
-    let/code/code.cpp
+    lix/code/builder.hpp
+    lix/code/builder.cpp
+    lix/code/code.hpp
+    lix/code/code.cpp
 
-    let/compiler/compile.hpp
-    let/compiler/compile.cpp
-    let/compiler/macro.hpp
-    let/compiler/macro.cpp
+    lix/compiler/compile.hpp
+    lix/compiler/compile.cpp
+    lix/compiler/macro.hpp
+    lix/compiler/macro.cpp
 
-    let/boxed.hpp
-    let/boxed.cpp
-    let/value.hpp
-    let/value.cpp
-    let/map.hpp
-    let/map.cpp
-    let/raise.hpp
-    let/raise.cpp
-    let/eval.hpp
-    let/eval.cpp
-    let/symbol.hpp
-    let/symbol.cpp
+    lix/boxed.hpp
+    lix/boxed.cpp
+    lix/value.hpp
+    lix/value.cpp
+    lix/map.hpp
+    lix/map.cpp
+    lix/raise.hpp
+    lix/raise.cpp
+    lix/eval.hpp
+    lix/eval.cpp
+    lix/symbol.hpp
+    lix/symbol.cpp
 
-    let/util/args.hpp
-    let/util/args.cpp
+    lix/util/args.hpp
+    lix/util/args.cpp
 
-    let/libs/libs.hpp
+    lix/libs/libs.hpp
     ${gen_lib_sources}
     )
-add_library(let::let ALIAS let)
-target_link_libraries(let
+add_library(lix::lix ALIAS lix)
+target_link_libraries(lix
     PUBLIC
-        let::base
+        lix::base
     PRIVATE
         $<BUILD_INTERFACE:tao::pegtl>
         $<BUILD_INTERFACE:hamt::hamt>
     )
-target_include_directories(let PUBLIC $<BUILD_INTERFACE:${gen_dir}>)
-set_property(TARGET let PROPERTY EXPORT_NAME let::let)
+target_include_directories(lix PUBLIC $<BUILD_INTERFACE:${gen_dir}>)
+set_property(TARGET lix PROPERTY EXPORT_NAME lix::lix)
 
-add_executable(let-parse let/parser/parse-main.cpp)
-target_link_libraries(let-parse PRIVATE let::let)
-add_executable(let-compile let/compiler/compile-main.cpp)
-target_link_libraries(let-compile PRIVATE let::let)
-add_executable(let-eval let/eval-main.cpp)
-target_link_libraries(let-eval PRIVATE let::let)
+add_executable(lix-parse lix/parser/parse-main.cpp)
+target_link_libraries(lix-parse PRIVATE lix::lix)
+add_executable(lix-compile lix/compiler/compile-main.cpp)
+target_link_libraries(lix-compile PRIVATE lix::lix)
+add_executable(lix-eval lix/eval-main.cpp)
+target_link_libraries(lix-eval PRIVATE lix::lix)
 
 install(
-    TARGETS let let-base
-    EXPORT let-targets
-    RUNTIME DESTINATION ${LET_INSTALL_INFIX}/bin
-    ARCHIVE DESTINATION ${LET_INSTALL_INFIX}/lib
-    INCLUDES DESTINATION ${LET_INSTALL_INFIX}/include
+    TARGETS lix lix-base
+    EXPORT lix-targets
+    RUNTIME DESTINATION ${LIX_INSTALL_INFIX}/bin
+    ARCHIVE DESTINATION ${LIX_INSTALL_INFIX}/lib
+    INCLUDES DESTINATION ${LIX_INSTALL_INFIX}/include
     )
 
 install(
-    DIRECTORY let ${gen_dir}/let
-    DESTINATION "${LET_INSTALL_INFIX}/include"
+    DIRECTORY lix ${gen_dir}/lix
+    DESTINATION "${LIX_INSTALL_INFIX}/include"
     FILES_MATCHING
         PATTERN *.hpp
 )

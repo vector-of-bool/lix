@@ -1,0 +1,12 @@
+#ifndef LIX_LIBS_@MODNAME@_HPP_INCLUDED
+#define LIX_LIBS_@MODNAME@_HPP_INCLUDED
+
+#include <lix/exec/context.hpp>
+
+namespace lix::libs {
+
+struct @MODNAME@ { static void eval(lix::exec::context&); };
+
+} // namespace lix::libs
+
+#endif // LIX_LIBS_@MODNAME@_HPP_INCLUDED

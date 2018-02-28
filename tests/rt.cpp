@@ -1,18 +1,18 @@
-#include <let/boxed.hpp>
-#include <let/compiler/compile.hpp>
-#include <let/eval.hpp>
-#include <let/exec/context.hpp>
-#include <let/exec/exec.hpp>
-#include <let/exec/kernel.hpp>
-#include <let/list.hpp>
-#include <let/parser/parse.hpp>
-#include <let/refl_get_member.hpp>
-#include <let/symbol.hpp>
-#include <let/tuple.hpp>
+#include <lix/boxed.hpp>
+#include <lix/compiler/compile.hpp>
+#include <lix/eval.hpp>
+#include <lix/exec/context.hpp>
+#include <lix/exec/exec.hpp>
+#include <lix/exec/kernel.hpp>
+#include <lix/list.hpp>
+#include <lix/parser/parse.hpp>
+#include <lix/refl_get_member.hpp>
+#include <lix/symbol.hpp>
+#include <lix/tuple.hpp>
 
 #include <catch/catch.hpp>
 
-using namespace let::literals;
+using namespace lix::literals;
 
 struct my_int {
     int value;
@@ -29,15 +29,15 @@ public:
 
 using namespace std::string_literals;
 
-LET_TYPEINFO(my_int, value);
-LET_TYPEINFO(my_java_int, value, set_value, other_fn);
-static_assert(let::refl::is_reflected<my_int>::value);
-static_assert(let::refl::is_reflected<my_java_int>::value);
+LIX_TYPEINFO(my_int, value);
+LIX_TYPEINFO(my_java_int, value, set_value, other_fn);
+static_assert(lix::refl::is_reflected<my_int>::value);
+static_assert(lix::refl::is_reflected<my_java_int>::value);
 
-static_assert(!let::is_boxable<std::string>::value);
+static_assert(!lix::is_boxable<std::string>::value);
 
 TEST_CASE("Iterate reflected members") {
-    using info = let::refl::ct_type_info<my_int>;
+    using info = lix::refl::ct_type_info<my_int>;
     CHECK(info::name() == "my_int"s);
     info::foreach_member([](auto mem) {
         CHECK(mem.name == "value"s);
@@ -46,19 +46,19 @@ TEST_CASE("Iterate reflected members") {
 }
 
 TEST_CASE("Qualified type info") {
-    using info = let::refl::ct_type_info<const my_int>;
+    using info = lix::refl::ct_type_info<const my_int>;
     CHECK(info::name() == "my_int const");
 }
 
 TEST_CASE("RTTI my_int") {
-    using ct_info = let::refl::ct_type_info<my_int>;
-    auto rt_info  = let::refl::rt_type_info{ct_info{}};
+    using ct_info = lix::refl::ct_type_info<my_int>;
+    auto rt_info  = lix::refl::rt_type_info{ct_info{}};
     CHECK(rt_info.name() == "my_int"s);
     CHECK(rt_info == rt_info);
     auto copy = rt_info;
     CHECK(copy == rt_info);
 
-    auto cv_rt = let::refl::rt_type_info::for_type<const my_int&>();
+    auto cv_rt = lix::refl::rt_type_info::for_type<const my_int&>();
     CHECK(cv_rt.name() == "my_int const&");
     CHECK(cv_rt != rt_info);
     CHECK(cv_rt.is_const());
@@ -74,11 +74,11 @@ TEST_CASE("RTTI my_int") {
     REQUIRE(mem_info);
     CHECK(mem_info->is_gettable());
 
-    // let::value v = my_int{};
+    // lix::value v = my_int{};
 }
 
 TEST_CASE("RTTI my_java_int") {
-    auto rt_info = let::refl::rt_type_info::for_type<my_java_int>();
+    auto rt_info = lix::refl::rt_type_info::for_type<my_java_int>();
     CHECK(rt_info.name() == "my_java_int");
     auto getter_info = rt_info.get_member_info("value");
     REQUIRE(getter_info);
@@ -95,11 +95,11 @@ TEST_CASE("RTTI my_java_int") {
 
 TEST_CASE("Pass reference") {
     my_int i{42};
-    auto   boxed_ref = let::boxed(std::ref(i));
+    auto   boxed_ref = lix::boxed(std::ref(i));
 }
 
 TEST_CASE("Map basics") {
-    let::map m;
+    lix::map m;
     auto     orig = m;
     m             = m.insert("foo"_sym, 12);
     // Check that we inserted:
@@ -130,60 +130,60 @@ TEST_CASE("Map basics") {
 }
 
 TEST_CASE("Simple eval") {
-    auto val = let::eval("2 + 5");
+    auto val = lix::eval("2 + 5");
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == 7);
 }
 
 TEST_CASE("Bigger eval") {
-    auto val = let::eval("2 + 3 + 4");
+    auto val = lix::eval("2 + 3 + 4");
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == 9);
 }
 
 TEST_CASE("Bigger eval!") {
-    auto val = let::eval("3 + 3 - 4");
+    auto val = lix::eval("3 + 3 - 4");
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == 2);
 }
 
 TEST_CASE("Eval 2") {
-    auto val = let::eval("2 + (6 - 2)");
+    auto val = lix::eval("2 + (6 - 2)");
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == 6);
 }
 
 TEST_CASE("Eval 3") {
-    auto val = let::eval("4 - 9 - 22");
+    auto val = lix::eval("4 - 9 - 22");
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == -27);
 }
 
 TEST_CASE("Eval 4") {
-    auto val = let::eval("4 - (9 - 22)");
+    auto val = lix::eval("4 - (9 - 22)");
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == 17);
 }
 
 TEST_CASE("Eval 5") {
-    auto val = let::eval("foo = 12");
+    auto val = lix::eval("foo = 12");
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == 12);
 }
 
 TEST_CASE("Eval 6") {
-    auto val = let::eval("foo = 33; foo + 3");
+    auto val = lix::eval("foo = 33; foo + 3");
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == 36);
 }
 
 TEST_CASE("Eval 7") {
-    auto val = let::eval("{1, 2}");
+    auto val = lix::eval("{1, 2}");
     REQUIRE(val.as_tuple());
 }
 
 TEST_CASE("Eval 8") {
-    auto val = let::eval(R"(
+    auto val = lix::eval(R"(
         tup = {1, 2, 3}
         {first, 2, 3} = tup
         first + 45
@@ -200,11 +200,11 @@ TEST_CASE("Eval 9") {
             false -> 99 + 23
         end
     )";
-    auto ast   = let::ast::parse(code);
-    auto block = let::compile(ast);
+    auto ast   = lix::ast::parse(code);
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
-    auto val = let::eval(ast);
+    REQUIRE_NOTHROW(lix::eval(ast));
+    auto val = lix::eval(ast);
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == 42);
 }
@@ -213,11 +213,11 @@ TEST_CASE("Eval 10") {
     auto code  = R"(
         ast = quote do: 12
     )";
-    auto ast   = let::ast::parse(code);
-    auto block = let::compile(ast);
+    auto ast   = lix::ast::parse(code);
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
-    auto val = let::eval(ast);
+    REQUIRE_NOTHROW(lix::eval(ast));
+    auto val = lix::eval(ast);
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == 12);
 }
@@ -228,24 +228,24 @@ TEST_CASE("Eval 11") {
             pie = 12
         end
     )";
-    auto ast   = let::ast::parse(code);
-    auto block = let::compile(ast);
+    auto ast   = lix::ast::parse(code);
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
-    auto val = let::eval(ast);
+    REQUIRE_NOTHROW(lix::eval(ast));
+    auto val = lix::eval(ast);
 }
 
 TEST_CASE("Call function") {
     auto code = R"(
         Test.test_fn(12)
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    let::exec::executor ex{block};
+    lix::exec::executor ex{block};
 
-    let::exec::module mod;
+    lix::exec::module mod;
     mod.add_function("test_fn", [](auto&, auto arg) {
         auto arglist = arg.as_tuple();
         if (!arglist || arglist->size() != 1) {
@@ -258,7 +258,7 @@ TEST_CASE("Call function") {
         return *int_ + 71;
     });
 
-    let::exec::context ctx;
+    lix::exec::context ctx;
     ctx.register_module("Test", mod);
     auto value = ex.execute_n(ctx, 100);
     REQUIRE(value);
@@ -274,11 +274,11 @@ TEST_CASE("case clauses") {
             12 -> 33
         end
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
+    REQUIRE_NOTHROW(lix::eval(ast));
 }
 
 TEST_CASE("case clauses 2") {
@@ -288,11 +288,11 @@ TEST_CASE("case clauses 2") {
             val -> val + 12
         end
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
+    REQUIRE_NOTHROW(lix::eval(ast));
 }
 
 TEST_CASE("case clauses 3") {
@@ -305,11 +305,11 @@ TEST_CASE("case clauses 3") {
             {key1, key2} -> :ok
         end
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
+    REQUIRE_NOTHROW(lix::eval(ast));
 }
 
 TEST_CASE("case clauses 4") {
@@ -322,14 +322,14 @@ TEST_CASE("case clauses 4") {
         # Check that the compiler unwinds the case clause properly
         raise 1
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
     try {
-        let::eval(code);
+        lix::eval(code);
         CHECK(false);
-    } catch (const let::raised_exception& e) {
+    } catch (const lix::raised_exception& e) {
         CHECK(e.value() == 1);
     }
 }
@@ -337,13 +337,13 @@ TEST_CASE("case clauses 4") {
 TEST_CASE("Register a module") {
     auto code = R"(
         modname = MyModule
-        mod = :__let.register_module(modname)
+        mod = :__lix.register_module(modname)
     )";
-    CHECK_NOTHROW(let::eval(code));
-    auto value = let::eval(code);
+    CHECK_NOTHROW(lix::eval(code));
+    auto value = lix::eval(code);
     auto boxed = value.as_boxed();
     REQUIRE(boxed);
-    auto mod = let::box_cast<let::exec::module>(*boxed);
+    auto mod = lix::box_cast<lix::exec::module>(*boxed);
 }
 
 TEST_CASE("Anonymous fn") {
@@ -353,12 +353,12 @@ TEST_CASE("Anonymous fn") {
         end
         fun.()
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
-    auto val = let::eval(ast);
+    REQUIRE_NOTHROW(lix::eval(ast));
+    auto val = lix::eval(ast);
     REQUIRE(val.as_integer());
     CHECK(*val.as_integer() == 12);
 }
@@ -372,12 +372,12 @@ TEST_CASE("Anonymous fn 2") {
         end
         fun.(1, 55)
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
-    auto val = let::eval(ast);
+    REQUIRE_NOTHROW(lix::eval(ast));
+    auto val = lix::eval(ast);
     CHECK(val == 2);
 }
 
@@ -391,13 +391,13 @@ TEST_CASE("Anonymous fn 3") {
         end
         fun.(1, 55)
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(code);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
-    auto val = let::eval(ast);
+    REQUIRE_NOTHROW(lix::eval(ast));
+    auto val = lix::eval(ast);
     CHECK(val == 15);
 }
 
@@ -413,13 +413,13 @@ TEST_CASE("Anonymous fn 4") {
         end
         fun.(1, 55)
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(code);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
-    auto val = let::eval(ast);
+    REQUIRE_NOTHROW(lix::eval(ast));
+    auto val = lix::eval(ast);
     CHECK(val == 21);
 }
 
@@ -436,31 +436,31 @@ TEST_CASE("Anonymous fn 5") {
         new_fun = fun.(1, 55)
         new_fun.()
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(code);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
-    auto val = let::eval(ast);
+    REQUIRE_NOTHROW(lix::eval(ast));
+    auto val = lix::eval(ast);
     CHECK(val == 3);
 }
 
 TEST_CASE("Define function") {
     auto code = R"(
-        mod = :__let.register_module(MyModule)
+        mod = :__lix.register_module(MyModule)
         fun = fn
             -> :good
         end
-        :__let.register_function(mod, :my_fn, fun)
+        :__lix.register_function(mod, :my_fn, fun)
 
         :good = MyModule.my_fn()
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE(let::eval(ast) == let::symbol("good"));
+    REQUIRE(lix::eval(ast) == lix::symbol("good"));
 }
 
 TEST_CASE("defmodule") {
@@ -481,21 +481,21 @@ TEST_CASE("defmodule") {
             end
         end
     )";
-    auto ctx  = let::exec::build_kernel_context();
-    REQUIRE_NOTHROW(let::eval(code, ctx));
-    auto value = let::eval("MyModule.my_function(13)", ctx);
+    auto ctx  = lix::exec::build_kernel_context();
+    REQUIRE_NOTHROW(lix::eval(code, ctx));
+    auto value = lix::eval("MyModule.my_function(13)", ctx);
     REQUIRE(value.as_integer());
     REQUIRE(*value.as_integer() == (13 + 42));
-    value = let::eval("MyModule.my_function()", ctx);
+    value = lix::eval("MyModule.my_function()", ctx);
     REQUIRE(value.as_symbol());
     CHECK(value.as_symbol()->string() == "no_args");
 
-    auto true_sym  = let::symbol("true");
-    auto false_sym = let::symbol("false");
-    CHECK(let::eval("MyModule.is_cat_sound('meow')", ctx) == true_sym);
-    CHECK(let::eval("MyModule.is_cat_sound('hiss')", ctx) == true_sym);
-    CHECK(let::eval("MyModule.is_cat_sound('barf')", ctx) == true_sym);
-    CHECK(let::eval("MyModule.is_cat_sound('woof')", ctx) == false_sym);
+    auto true_sym  = lix::symbol("true");
+    auto false_sym = lix::symbol("false");
+    CHECK(lix::eval("MyModule.is_cat_sound('meow')", ctx) == true_sym);
+    CHECK(lix::eval("MyModule.is_cat_sound('hiss')", ctx) == true_sym);
+    CHECK(lix::eval("MyModule.is_cat_sound('barf')", ctx) == true_sym);
+    CHECK(lix::eval("MyModule.is_cat_sound('woof')", ctx) == false_sym);
 }
 
 TEST_CASE("Alias 1") {
@@ -521,10 +521,10 @@ TEST_CASE("Alias 1") {
         ##     end
         ## end
     )";
-    auto ctx  = let::exec::build_kernel_context();
-    REQUIRE_NOTHROW(let::eval(code, ctx));
-    CHECK(let::eval("OtherMod.test_alias(4)", ctx) == 46);
-    // CHECK(let::eval("OtherMod2.test_alias(4)", ctx) == 46);
+    auto ctx  = lix::exec::build_kernel_context();
+    REQUIRE_NOTHROW(lix::eval(code, ctx));
+    CHECK(lix::eval("OtherMod.test_alias(4)", ctx) == 46);
+    // CHECK(lix::eval("OtherMod2.test_alias(4)", ctx) == 46);
 }
 
 TEST_CASE("Cons 1") {
@@ -533,11 +533,11 @@ TEST_CASE("Cons 1") {
         [hd|tail] = list
         hd
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE(let::eval(ast) == let::symbol("cat"));
+    REQUIRE(lix::eval(ast) == lix::symbol("cat"));
 }
 
 TEST_CASE("Cons 2") {
@@ -545,11 +545,11 @@ TEST_CASE("Cons 2") {
         list = [:dog, :bird, :person]
         new_list = [:cat | list]
     )";
-    auto ast  = let::ast::parse(code);
-    CHECK_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    CHECK_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    CHECK_NOTHROW(let::eval(ast));
+    CHECK_NOTHROW(lix::eval(ast));
 }
 
 TEST_CASE("Raise 1") {
@@ -557,9 +557,9 @@ TEST_CASE("Raise 1") {
         raise 5
     )";
     try {
-        let::eval(code);
+        lix::eval(code);
         CHECK(false);
-    } catch (const let::raised_exception& e) {
+    } catch (const lix::raised_exception& e) {
         CHECK(e.value() == 5);
     }
 }
@@ -571,10 +571,10 @@ TEST_CASE("Raise 2") {
         end
     )";
     try {
-        let::eval(code);
+        lix::eval(code);
         CHECK(false);
-    } catch (const let::raised_exception& e) {
-        CHECK(e.value() == let::tuple::make(let::symbol("nomatch"), 5));
+    } catch (const lix::raised_exception& e) {
+        CHECK(e.value() == lix::tuple::make(lix::symbol("nomatch"), 5));
     }
 }
 
@@ -589,11 +589,11 @@ TEST_CASE("Raise badarg") {
         Dummy.foo(5, 7)
     )";
     try {
-        let::eval(code);
+        lix::eval(code);
         CHECK(false);
-    } catch (const let::raised_exception& e) {
+    } catch (const lix::raised_exception& e) {
         CHECK(e.value()
-              == let::tuple::make(let::symbol("badarg"), "Dummy.foo", let::tuple::make(5, 7)));
+              == lix::tuple::make(lix::symbol("badarg"), "Dummy.foo", lix::tuple::make(5, 7)));
     }
 }
 
@@ -611,7 +611,7 @@ TEST_CASE("Pipe") {
 
         :meow = Dummy.foo |> Dummy.bar
     )";
-    CHECK_NOTHROW(let::eval(code));
+    CHECK_NOTHROW(lix::eval(code));
 }
 
 TEST_CASE("to_string") {
@@ -619,7 +619,7 @@ TEST_CASE("to_string") {
         "foo" = to_string("foo")
         "foo" = to_string(:foo)
     )";
-    CHECK_NOTHROW(let::eval(code));
+    CHECK_NOTHROW(lix::eval(code));
 }
 
 TEST_CASE("Unbound captured name in anon_fn") {
@@ -636,18 +636,18 @@ TEST_CASE("Unbound captured name in anon_fn") {
             12
         )
     )";
-    CHECK_NOTHROW(let::eval(code));
+    CHECK_NOTHROW(lix::eval(code));
 }
 
 TEST_CASE("map 1") {
     auto code = R"(
         map = %{}
     )";
-    auto ast  = let::ast::parse(code);
-    REQUIRE_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    REQUIRE_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
+    REQUIRE_NOTHROW(lix::eval(ast));
 }
 
 TEST_CASE("map 2") {
@@ -655,11 +655,11 @@ TEST_CASE("map 2") {
         map = %{foo: 12}
         12 = map.foo
     )";
-    auto ast  = let::ast::parse(code);
-    REQUIRE_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ast  = lix::ast::parse(code);
+    REQUIRE_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast));
+    REQUIRE_NOTHROW(lix::eval(ast));
 }
 
 TEST_CASE("Tail call") {
@@ -672,10 +672,10 @@ TEST_CASE("Tail call") {
 
         42 = tail_fn.(999990, tail_fn)
     )";
-    auto ctx  = let::exec::build_kernel_context();
-    auto ast  = let::ast::parse(code);
-    REQUIRE_NOTHROW(let::compile(ast));
-    auto block = let::compile(ast);
+    auto ctx  = lix::exec::build_kernel_context();
+    auto ast  = lix::ast::parse(code);
+    REQUIRE_NOTHROW(lix::compile(ast));
+    auto block = lix::compile(ast);
     INFO(block);
-    REQUIRE_NOTHROW(let::eval(ast, ctx));
+    REQUIRE_NOTHROW(lix::eval(ast, ctx));
 }

@@ -20,6 +20,6 @@ foreach(name IN ITEMS
         )
     set(tname cpp.test.${name})
     add_executable(${tname} ${name}.cpp)
-    target_link_libraries(${tname} PRIVATE catch::main let::let)
+    target_link_libraries(${tname} PRIVATE catch::main lix::lix)
     add_test(${tname} ${tname})
 endforeach()
