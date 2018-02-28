@@ -235,6 +235,22 @@ TEST_CASE("Eval 11") {
     auto val = lix::eval(ast);
 }
 
+TEST_CASE("Eval 12") {
+    auto code  = R"(
+        langname = case :cxx do
+          :c -> "C"
+          :cxx -> "C++"
+        end
+        langid = "Language " + langname
+        "Language C++" = langid
+    )";
+    auto ast   = lix::ast::parse(code);
+    auto block = lix::compile(ast);
+    INFO(block);
+    REQUIRE_NOTHROW(lix::eval(ast));
+    auto val = lix::eval(ast);
+}
+
 TEST_CASE("Call function") {
     auto code = R"(
         Test.test_fn(12)

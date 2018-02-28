@@ -196,7 +196,7 @@ struct exec_visitor {
     template <typename CallInstr>
     void _dyn_call(const CallInstr& c, bool is_tail) {
         auto& callee = ex.nth(c.fn);
-        auto arg = ex.nth(c.arg);
+        auto  arg    = ex.nth(c.arg);
         if (auto closure = callee.as_closure()) {
             _call_closure(*closure, arg, is_tail);
         } else if (auto fn = callee.as_function()) {
@@ -256,21 +256,26 @@ struct exec_visitor {
         if (auto l_int = lhs.as_integer()) {
             if (auto r_int = rhs.as_integer()) {
                 ex.push(op(*l_int, *r_int));
+                return true;
             } else if (auto r_real = rhs.as_real()) {
                 ex.push(op(*l_int, *r_real));
+                return true;
             } else {
                 return false;
             }
         } else if (auto l_real = lhs.as_real()) {
             if (auto r_real = rhs.as_real()) {
                 ex.push(op(*l_real, *r_real));
+                return true;
             } else if (auto r_int = rhs.as_integer()) {
                 ex.push(op(*l_real, *r_int));
+                return true;
             } else {
                 return false;
             }
+        } else {
+            return false;
         }
-        return true;
     }
 
     void execute(is::add add) {
