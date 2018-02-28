@@ -1,0 +1,14 @@
+defmodule Path do
+  def absname(p), do: absname(p, cwd())
+  def absname(p, base), do: :__path.absname(p, base)
+  def cwd(), do: :__path.cwd()
+  def basename(p), do: :__path.basename(p)
+  def dirname(p), do: :__path.dirname(p)
+  def join(a, b), do: :__path.join(a, b)
+  def join([a, b]), do: join(a, b)
+  def join([a|tail]), do: join(a, join(tail))
+  def wildcard(glob), do: wildcard(glob, [])
+  def wildcard(glob, opts), do: :__path.wildcard(glob, opts)
+  def list_dir_r(p), do: :__path.list_dir_r(p)
+  def extname(p), do: :__path.extname(p)
+end

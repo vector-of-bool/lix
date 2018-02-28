@@ -1,0 +1,51 @@
+defmodule File do
+  def write(path, content) do
+    :__file.write(path, content)
+  end
+
+  def write!(path, content) do
+    case write(path, content) do
+      :ok -> :ok
+      {:error, what} ->
+        raise {:err, {what, "Failed to write to file " + path}}
+    end
+  end
+
+  def read(path) do
+    :__file.read(path)
+  end
+
+  def read!(path) do
+    case read(path) do
+      {:ok, str} -> str
+      {:error, what} ->
+        raise {:err, {what, "Failed to read from file " + path}}
+    end
+  end
+
+  def rm(path) do
+    :__file.rm(path)
+  end
+
+  def rm!(path) do
+    case rm(path) do
+      :ok -> :ok
+      {:error, what} ->
+        raise {:err, {what, "Failed to remove file " + path}}
+    end
+  end
+
+  def stat(path) do
+    :__file.stat(path)
+  end
+
+  def exists?(path) do
+    case stat(path) do
+      {:ok, _stat} -> true
+      {:error, :enoent} -> false
+      {:error, :enotdir} -> false
+      {:error, what} ->
+        raise {:error, what, path}
+    end
+  end
+end

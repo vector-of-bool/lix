@@ -1,0 +1,21 @@
+#include "@MODNAME@.hpp"
+
+#include <lix/eval.hpp>
+#include <lix/util/args.hpp>
+
+@EXTRA_CODE@
+
+namespace {
+
+const char* module_code = R"code(
+
+@MODCODE@
+
+)code";
+
+}
+
+void lix::libs::@MODNAME@::eval(lix::exec::context& ctx) {
+    @EXTRA_CALL@;
+    lix::eval(module_code, ctx);
+}

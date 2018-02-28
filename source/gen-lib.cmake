@@ -1,0 +1,10 @@
+file(READ "${in_mod}" MODCODE)
+set(MODNAME "${name}")
+set(extra_file "${in_mod}.extra.cpp")
+if(EXISTS "${extra_file}")
+    set(EXTRA_CALL "::do_extra(ctx)")
+    file(READ "${extra_file}" EXTRA_CODE)
+endif()
+
+configure_file("${in_hpp}" "${out_hpp}" @ONLY)
+configure_file("${in_cpp}" "${out_cpp}" @ONLY)

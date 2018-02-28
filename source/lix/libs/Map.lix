@@ -1,0 +1,60 @@
+defmodule Map do
+  def pop(map, key, default) do
+    Kernel.__map_pop(map, key, default)
+  end
+
+  def fetch(map, key) do
+    Kernel.__map_fetch(map, key)
+  end
+
+  def put(map, key, value) do
+    Kernel.__map_put(map, key, value)
+  end
+
+  def pop(map, key), do: pop(map, key, nil)
+
+  def fetch!(map, key) do
+    case fetch(map, key) do
+      {:ok, val} -> val
+      :error -> raise {KeyError, key}
+    end
+  end
+
+  def get(map, key), do: get(map, key, nil)
+  def get(map, key, default) do
+    case fetch(map, key) do
+      {:ok, val} -> val
+      :error -> default
+    end
+  end
+
+  def get_and_update(map, key, fun) do
+    old_value = get(map, key)
+    new_map =
+      case fun.(old_value) do
+        {old_value, new_value} ->
+          put(map, key, new_value)
+        :pop ->
+          {old_value, map} = pop(map, key)
+          map
+      end
+    {old_value, new_map}
+  end
+
+  def get_and_update!(map, key, fun) do
+    old_value = get(map, key)
+    new_value = fun.(old_value)
+    put(map, key, new_value)
+  end
+
+  def delete(map, key) do
+    {_, map2} = pop(map, key, nil)
+    map2
+  end
+
+  def drop(map, []), do: map
+  def drop(map, [hd|tail]) do
+    map2 = delete(map, hd)
+    drop(map2, tail)
+  end
+end

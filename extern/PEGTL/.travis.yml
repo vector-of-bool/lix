@@ -1,0 +1,317 @@
+language: generic
+os: linux
+dist: trusty
+
+branches:
+  only:
+    - master
+
+matrix:
+  include:
+    - compiler: gcc
+      env:
+        - CXX=g++-4.8
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-4.9']
+      env:
+        - CXX=g++-4.9
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-5']
+      env:
+        - CXX=g++-5
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-6']
+      env:
+        - CXX=g++-6
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-6']
+      env:
+        - CXX=g++-6
+        - CXXSTD=-std=c++14
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-7']
+      env:
+        - CXX=g++-7
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-7']
+      env:
+        - CXX=g++-7
+        - CXXSTD=-std=c++17
+
+    - dist: precise
+      compiler: clang
+      env:
+        - CXX=clang++
+
+    - compiler: clang
+      addons:
+        apt:
+          packages: ['clang-3.5']
+      env:
+        - CXX=clang++-3.5
+
+    - compiler: clang
+      addons:
+        apt:
+          packages: ['clang-3.6']
+      env:
+        - CXX=clang++-3.6
+
+    - dist: precise
+      compiler: clang
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-precise-3.7']
+          packages: ['clang-3.7']
+      env:
+        - CXX=clang++-3.7
+
+    - compiler: clang
+      addons:
+        apt:
+          packages: ['clang-3.8']
+      env:
+        - CXX=clang++-3.8
+
+    - compiler: clang
+      addons:
+        apt:
+          packages: ['clang-3.9']
+      env:
+        - CXX=clang++-3.9
+
+    - compiler: clang
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-4.0']
+          packages: ['clang-4.0']
+      env:
+        - CXX=clang++-4.0
+
+    - compiler: clang
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-4.0']
+          packages: ['clang-4.0']
+      env:
+        - CXX=clang++-4.0
+        - CXXSTD=-std=c++14
+
+    - compiler: clang
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-5.0']
+          packages: ['clang-5.0']
+      env:
+        - CXX=clang++-5.0
+
+    - compiler: clang
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-5.0']
+          packages: ['clang-5.0']
+      env:
+        - CXX=clang++-5.0
+        - CXXSTD=-std=c++17
+
+    - os: osx
+      osx_image: xcode6.4
+      compiler: clang
+      env:
+        - CXX=clang++
+
+    - os: osx
+      osx_image: xcode7.3
+      compiler: clang
+      env:
+        - CXX=clang++
+
+    - os: osx
+      osx_image: xcode8.3
+      compiler: clang
+      env:
+        - CXX=clang++
+
+    - os: osx
+      osx_image: xcode9.2
+      compiler: clang
+      env:
+        - CXX=clang++
+
+    - language: android
+      jdk: openjdk8
+      android:
+        components:
+          - tools
+          - platform-tools
+          - build-tools-23.0.3
+          - extra-android-support
+          - extra-android-m2repository
+          - android-19
+          - sys-img-armeabi-v7a-android-19
+          # Unfortunately travis uses the old android sdk tool instead of the new sdkmanager.
+          # In this deprecated android sdk tool there is no ndk-bundle or cmake package!
+        licenses:
+          - '.+'
+      before_install:
+        # Install NDK and cmake via android sdkmanager. Unfortunately to acknowledge the licenses
+        # takes a while. Looks like the "echo y" solution is not working. Needs improvement!
+        - export TERM=dumb
+        - echo "y" | /usr/local/android-sdk/tools/bin/sdkmanager "ndk-bundle" "cmake;3.6.4111459"
+      before_script:
+        - export TERM=dumb
+        - export _NO_CHECK_SIGNATURE=true
+        - echo no | android create avd --force -n test -t android-19 --abi armeabi-v7a
+        - emulator -avd test -no-audio -no-window &
+        - android-wait-for-emulator || android-wait-for-emulator
+      script:
+        # Using the ninja build command. Is much faster then make build command.
+        - /usr/local/android-sdk/cmake/3.6.4111459/bin/cmake -G'Android Gradle - Ninja' -DANDROID_ABI=armeabi-v7a -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/usr/local/android-sdk/ndk-bundle/build/cmake/android.toolchain.cmake -DANDROID_PLATFORM=android-19 -DCMAKE_MAKE_PROGRAM=/usr/local/android-sdk/cmake/3.6.4111459/bin/ninja -DPEGTL_BUILD_EXAMPLES=OFF
+        - /usr/local/android-sdk/cmake/3.6.4111459/bin/cmake --build . --target all
+        - /usr/local/android-sdk/cmake/3.6.4111459/bin/cmake --build . --target test
+
+
+    - language: android
+      jdk: openjdk8
+      android:
+        components:
+          - tools
+          - platform-tools
+          - build-tools-23.0.3
+          - extra-android-support
+          - extra-android-m2repository
+          - android-22
+          - sys-img-armeabi-v7a-android-22
+          # Unfortunately travis uses the old android sdk tool instead of the new sdkmanager.
+          # In this deprecated android sdk tool there is no ndk-bundle or cmake package!
+        licenses:
+          - '.+'
+      before_install:
+        # Install NDK and cmake via android sdkmanager. Unfortunately to acknowledge the licenses
+        # takes a while. Looks like the "echo y" solution is not working. Needs improvement!
+        - export TERM=dumb
+        - echo "y" | /usr/local/android-sdk/tools/bin/sdkmanager "ndk-bundle" "cmake;3.6.4111459"
+      before_script:
+        - export TERM=dumb
+        - export _NO_CHECK_SIGNATURE=true
+        - echo no | android create avd --force -n test -t android-22 --abi armeabi-v7a
+        - emulator -avd test -no-audio -no-window &
+        - android-wait-for-emulator || android-wait-for-emulator
+      script:
+        # Using the ninja build command. Is much faster then make build command.
+        - /usr/local/android-sdk/cmake/3.6.4111459/bin/cmake -G'Android Gradle - Ninja' -DANDROID_ABI=armeabi-v7a -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/usr/local/android-sdk/ndk-bundle/build/cmake/android.toolchain.cmake -DANDROID_PLATFORM=android-22 -DCMAKE_MAKE_PROGRAM=/usr/local/android-sdk/cmake/3.6.4111459/bin/ninja -DPEGTL_BUILD_EXAMPLES=OFF
+        - /usr/local/android-sdk/cmake/3.6.4111459/bin/cmake --build . --target all
+        - /usr/local/android-sdk/cmake/3.6.4111459/bin/cmake --build . --target test
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-7']
+      env:
+        - CXX=g++-7
+        - CXXFLAGS="-O0 --coverage"
+      before_script:
+        - pip install --user cpp-coveralls
+      script:
+        - make -kj3 check
+        - coveralls --gcov gcov-7 --gcov-options '\-lp' --exclude src
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-7']
+      env:
+        - CXX=g++-7
+        - CPPFLAGS=-fsanitize=undefined
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-7']
+      env:
+        - CXX=g++-7
+        - CPPFLAGS="-fsanitize=address -fuse-ld=gold"
+
+    - compiler: clang
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-5.0']
+          packages: ['clang-5.0']
+      env:
+        - CXX=clang++-5.0
+        - CPPFLAGS=-fsanitize=undefined
+
+    - compiler: clang
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-5.0']
+          packages: ['clang-5.0']
+      env:
+        - CXX=clang++-5.0
+        - CPPFLAGS=-fsanitize=address
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-7', 'valgrind']
+      env:
+        - CXX=g++-7
+        - SPECIAL=valgrind
+      script:
+        - make -kj3 valgrind
+
+    - compiler: gcc
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-7', 'cppcheck']
+      env:
+        - CXX=g++-7
+        - SPECIAL=cppcheck
+      script:
+        - make -kj3 cppcheck
+
+    - compiler: clang
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-5.0']
+          packages: ['clang-5.0', 'clang-tidy-5.0']
+      env:
+        - CXX=clang++-5.0
+        - CLANG_TIDY=clang-tidy-5.0
+      script:
+        - "sed -i 's#TAOCPP_PEGTL_NAMESPACE#pegtl#g' $(find . -name '*.[hc]pp')"
+        - echo >include/tao/pegtl/config.hpp
+        - make -kj3 clang-tidy
+
+script:
+  - $CXX --version
+  - make -kj3
