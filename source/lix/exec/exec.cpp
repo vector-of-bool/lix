@@ -4,8 +4,19 @@
 
 #include <lix/refl_get_member.hpp>
 
+#include <iomanip>
+#include <iostream>
+
 using namespace lix;
 using namespace lix::exec;
+
+#if 0  // Toggle on/off exec debugging
+using std::cerr;
+using std::endl;
+#define EXEC_DEBUG 1
+#else
+#define EXEC_DEBUG 0
+#endif
 
 namespace is = lix::code::is_types;
 
@@ -33,6 +44,17 @@ public:
     }
 
     const lix::value& nth(slot_ref_t off) const { return _stack.nth(off); }
+
+#if EXEC_DEBUG
+    void debug_print() const {
+        if (_stack.size() == 0) {
+            cerr << "    [empty]\n";
+        }
+        for (auto i = 0u; i < _stack.size(); ++i) {
+            cerr << "    [" << std::setw(3) << i << "]  " << inspect(nth(slot_ref_t{i})) << '\n';
+        }
+    }
+#endif
 
     const lix::value& top() const {
         assert(_stack.size() != 0);
@@ -619,6 +641,12 @@ struct exec_visitor {
 
 void lix::exec::detail::executor_impl::_exec_one(context& ctx) {
     const auto& instr = _top_frame().get_and_advance();
+#if EXEC_DEBUG
+    cerr << "lix::exec::detail::executor_impl::_exec_one\n";
+    cerr << "  Stack contents:\n";
+    _top_frame().debug_print();
+    cerr << "  execute -> " << instr << '\n' << endl;
+#endif
     instr.visit([&](const auto& i) { exec_visitor{ctx, *this}.execute(i); });
 }
 

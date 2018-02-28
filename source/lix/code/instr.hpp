@@ -8,6 +8,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <ostream>
 
 namespace lix::code {
 
@@ -252,6 +253,8 @@ public:
     is_types::any_var&       instr_var() { return _inst; }
     const is_types::any_var& instr_var() const { return _inst; }
 };
+
+std::ostream& operator<<(std::ostream&, const instr&);
 
 }  // namespace lix::code
 
