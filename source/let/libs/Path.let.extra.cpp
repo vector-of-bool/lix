@@ -9,6 +9,8 @@ namespace fs = std::experimental::filesystem;
 
 let::exec::module build_path_basemod() {
     let::exec::module mod;
+    mod.add_function("cwd",
+                     [&](auto&, const auto&) -> let::value { return fs::current_path().string(); });
     mod.add_function("absname", [&](auto&, const auto& tup) -> let::value {
         const auto& [in_str, base_str] = let::unpack_arg_tuple<std::string, std::string>(tup);
         auto in_path                   = fs::path(in_str);
