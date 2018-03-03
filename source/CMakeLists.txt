@@ -69,6 +69,8 @@ add_library(lix STATIC
     lix/code/builder.cpp
     lix/code/code.hpp
     lix/code/code.cpp
+    lix/code/instr.hpp
+    lix/code/instr.cpp
 
     lix/compiler/compile.hpp
     lix/compiler/compile.cpp
