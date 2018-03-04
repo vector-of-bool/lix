@@ -27,7 +27,7 @@ struct Stat {
     lix::integer mode;
     lix::integer mtime;
     lix::integer size;
-    lix::integer type;
+    lix::symbol  type = "<invalid>"_sym;
     lix::integer uid;
 };
 
@@ -49,6 +49,19 @@ LIX_TYPEINFO(lix::File::Stat,
              uid);
 
 namespace {
+
+lix::symbol type_to_sym(::mode_t st_mode) {
+    static const auto dir_sym   = "directory"_sym;
+    static const auto file_sym  = "file"_sym;
+    static const auto other_sym = "other"_sym;
+    if (S_ISDIR(st_mode)) {
+        return dir_sym;
+    } else if (S_ISREG(st_mode)) {
+        return file_sym;
+    } else {
+        return other_sym;
+    }
+}
 
 lix::symbol error_code_to_sym(int e) {
     switch (e) {
@@ -132,6 +145,7 @@ lix::exec::module& file_basemod() {
                              lix_stat.minor_device = st.st_rdev;
                              lix_stat.inode        = st.st_ino;
                              lix_stat.mode         = st.st_mode;
+                             lix_stat.type         = type_to_sym(st.st_mode);
                              lix_stat.uid          = st.st_uid;
                              lix_stat.gid          = st.st_gid;
                              lix_stat.size         = st.st_size;

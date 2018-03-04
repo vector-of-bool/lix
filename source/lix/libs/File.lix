@@ -48,4 +48,11 @@ defmodule File do
         raise {:error, what, path}
     end
   end
+
+  def dir?(path) do
+    case stat(path) do
+      {:error, _} -> false
+      {:ok, stat} -> state.type == :directory
+    end
+  end
 end
