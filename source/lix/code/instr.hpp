@@ -49,6 +49,9 @@ struct neq {
     slot_ref_t a;
     slot_ref_t b;
 };
+struct negate {
+    slot_ref_t arg;
+};
 struct const_int {
     std::int64_t value;
 };
@@ -189,6 +192,7 @@ using any_var = std::variant<ret,
                              div,
                              eq,
                              neq,
+                             negate,
                              const_int,
                              const_real,
                              const_symbol,

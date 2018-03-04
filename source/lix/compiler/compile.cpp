@@ -372,6 +372,13 @@ struct block_compiler {
             } else if (lhs_str == "&") {
                 auto rewritten = rewrite_minifun(args, meta);
                 return compile(rewritten);
+            } else if (lhs_str == "not") {
+                if (args.nodes.size() != 1) {
+                    throw compile_error{"`not` expects a single argument", meta};
+                }
+                auto rhs_slot = compile(args.nodes[0]);
+                builder.push_instr(is::negate{rhs_slot});
+                return consume_slot();
             } else if (lhs_str == "cond") {
                 return _compile_cond(args.nodes, meta, tail);
             } else if (lhs_str == "case") {

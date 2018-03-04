@@ -44,6 +44,7 @@ struct code_ostream_visitor {
     }
     void operator()(is::eq e) { o << std::setw(13) << "eq  " << e.a << ", " << e.b; }
     void operator()(is::neq e) { o << std::setw(13) << "neq  " << e.a << ", " << e.b; }
+    void operator()(is::negate n) { o << std::setw(13) << "negate  " << n.arg; }
     void operator()(is::const_int i) { o << std::setw(13) << "const_int  " << i.value; }
     void operator()(is::const_real r) { o << std::setw(13) << "const_real  " << r.value; }
     void operator()(is::const_symbol sym) {
@@ -134,4 +135,5 @@ struct code_ostream_visitor {
 
 std::ostream& lix::code::operator<<(std::ostream& o, const lix::code::instr& inst) {
     inst.visit(code_ostream_visitor{o});
+    return o;
 }

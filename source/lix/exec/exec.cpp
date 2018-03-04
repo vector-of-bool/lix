@@ -145,9 +145,35 @@ public:
     }
 };
 
+class common_syms {
+public:
+    // Because we generate a lot of symbols while running, it's good to statically construct them so
+    // we don't incure a table lookup each time we want a symbol
+    const lix::symbol false_ = "false"_sym;
+    const lix::symbol true_  = "true"_sym;
+
+private:
+    common_syms()                   = default;
+    common_syms(const common_syms&) = delete;
+
+public:
+    static const common_syms& inst() {
+        static common_syms ret;
+        return ret;
+    }
+};
+
 struct exec_visitor {
+private:
+    const common_syms& sym = common_syms::inst();
+
     lix::exec::context&               ctx;
     lix::exec::detail::executor_impl& ex;
+
+public:
+    exec_visitor(lix::exec::context& ctx_, lix::exec::detail::executor_impl& ex_)
+        : ctx(ctx_)
+        , ex(ex_) {}
 
     std::vector<std::string> _make_traceback() const {
         std::vector<std::string> traceback;
@@ -325,7 +351,7 @@ struct exec_visitor {
         auto& lhs       = ex.nth(eq.a);
         auto& rhs       = ex.nth(eq.b);
         auto  are_equal = lhs == rhs;
-        ex.push(are_equal ? lix::symbol{"true"} : lix::symbol{"false"});
+        ex.push(are_equal ? sym.true_ : sym.false_);
     }
 
     void execute(is::neq eq) {
@@ -333,7 +359,22 @@ struct exec_visitor {
         auto& lhs       = ex.nth(eq.a);
         auto& rhs       = ex.nth(eq.b);
         auto  are_equal = lhs == rhs;
-        ex.push(are_equal ? lix::symbol{"false"} : lix::symbol{"true"});
+        ex.push(are_equal ? sym.false_ : sym.true_);
+    }
+
+    void execute(is::negate n) {
+        auto& val     = ex.nth(n.arg);
+        auto  arg_sym = val.as_symbol();
+        if (!arg_sym) {
+            _raise_tuple("einval"_sym, "not"_sym, val);
+        }
+        if (*arg_sym == sym.true_) {
+            ex.push(sym.false_);
+        } else if (*arg_sym == sym.false_) {
+            ex.push(sym.true_);
+        } else {
+            _raise_tuple("einval"_sym, "not"_sym, val);
+        }
     }
 
     bool _do_match(const tuple& lhs, const tuple& rhs) {
