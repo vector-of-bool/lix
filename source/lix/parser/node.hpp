@@ -55,6 +55,8 @@ public:
     auto line() const { return _line; }
     void set_column(int column) { _column = column; }
     auto column() const { return _column; }
+
+    value to_value() const;
 };
 
 class call {

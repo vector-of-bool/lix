@@ -62,19 +62,19 @@ std::string ast::to_string(const node& n) {
     return strm.str();
 }
 
-namespace {
-
-value meta_to_value(const meta& m) {
-    auto fn_dets = m.fn_details();
+lix::value lix::ast::meta::to_value() const {
+    auto fn_dets = fn_details();
     auto first
         = fn_dets ? value(lix::tuple::make(fn_dets->first, fn_dets->second)) : value("nil"_sym);
-    return lix::tuple::make(first, m.line(), m.column());
+    return lix::tuple::make(first, "<unknown>", line(), column());
 }
+
+namespace {
 
 ast::meta meta_from_value(const lix::value& v) {
     ast::meta ret;
     auto      tup = v.as_tuple();
-    if (!tup || tup->size() != 3) {
+    if (!tup || tup->size() != 4) {
         return ret;
     }
     auto first = (*tup)[0];
@@ -86,11 +86,11 @@ ast::meta meta_from_value(const lix::value& v) {
             ret.set_fn_details(mod.as_symbol()->string(), fn.as_symbol()->string());
         }
     }
-    auto line = (*tup)[1].as_integer();
+    auto line = (*tup)[2].as_integer();
     if (line) {
         ret.set_line(*line);
     }
-    auto col = (*tup)[2].as_integer();
+    auto col = (*tup)[3].as_integer();
     if (col) {
         ret.set_column(*col);
     }
@@ -122,7 +122,7 @@ struct to_value_converter {
     value operator()(const ast::call& c) {
         std::vector<value> triple;
         triple.emplace_back(c.target().to_value());
-        triple.emplace_back(meta_to_value(c.meta()));
+        triple.emplace_back(c.meta().to_value());
         triple.emplace_back(c.arguments().to_value());
         return lix::tuple(std::move(triple));
     }

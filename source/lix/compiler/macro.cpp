@@ -171,8 +171,9 @@ struct ast_escaper {
 
     node operator()(const ast::call& call) {
         auto target = call.target().visit(*this);
+        auto meta   = node::from_value(call.meta().to_value());
         auto args   = call.arguments().visit(*this);
-        return ast::call(symbol("{}"), {}, ast::list({target, node(ast::list()), args}));
+        return ast::call(symbol("{}"), {}, ast::list({target, meta, args}));
     }
 };
 
