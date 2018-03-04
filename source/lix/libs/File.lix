@@ -52,7 +52,7 @@ defmodule File do
   def dir?(path) do
     case stat(path) do
       {:error, _} -> false
-      {:ok, stat} -> state.type == :directory
+      {:ok, stat} -> stat.type == :directory
     end
   end
 end
