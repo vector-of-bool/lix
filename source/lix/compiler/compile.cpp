@@ -967,8 +967,8 @@ struct block_compiler {
                     top_varmap().emplace(var_sym->string(), new_var_slot);
                     return new_var_slot;
                 } else {
-                    throw compile_error{"Name '" + var_sym->string()
-                                            + "' does not name a variable bound at this scope.",
+                    throw compile_error{"Name ‘" + var_sym->string()
+                                            + "’ does not name a variable bound at this scope.",
                                         call.meta()};
                 }
             }
