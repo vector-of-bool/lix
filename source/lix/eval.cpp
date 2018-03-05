@@ -42,3 +42,16 @@ lix::value lix::eval(const lix::exec::closure& fn, exec::context& ctx, const lix
     lix::exec::executor ex{fn, args};
     return ex.execute_all(ctx);
 }
+
+lix::value
+lix::call_mfa_tup(exec::context& ctx, lix::symbol mod_sym, lix::symbol fn_sym, const lix::tuple& args) {
+    auto mod = ctx.get_module(mod_sym.string());
+    if (!mod) {
+        throw std::runtime_error{"No such module " + mod_sym.string()};
+    }
+    auto fn = mod->get_function(fn_sym.string());
+    if (!fn) {
+        throw std::runtime_error{"No such function " + fn_sym.string()};
+    }
+    return std::visit([&](auto&& func) { return lix::eval(func, ctx, args); }, *fn);
+}
