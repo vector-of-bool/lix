@@ -62,6 +62,10 @@ TEST_CASE("Create a context with libraries") {
         12 = Map.fetch!(mymap, :foo)
         {12, newmap} = Map.pop(mymap, :foo)
 
+        "Hello, world" = String.replace("cake, world", "cake", "Hello")
+
+        "ooo oooooo" = String.replace("o oo", "o", "ooo")
+
         IO.puts("Hello, Mike")
     )code",
                     ctx);

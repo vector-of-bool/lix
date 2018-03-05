@@ -10,4 +10,6 @@ defmodule String do
   def split(str, pattern) do
     :__string.split(str, pattern)
   end
+
+  def replace(subject, pattern, repl), do: :__string.replace(subject, pattern, repl)
 end

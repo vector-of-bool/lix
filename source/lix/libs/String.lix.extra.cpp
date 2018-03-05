@@ -42,7 +42,7 @@ lix::exec::module build_string_basemod() {
                      lix::wrap_function(
                          [](const lix::string& str, const lix::string& pattern) -> lix::list {
                              std::vector<lix::string> parts;
-                             lix::string::size_type   new_end = 0;
+                             lix::string::size_type   new_end  = 0;
                              lix::string::size_type   last_end = 0;
                              while (true) {
                                  new_end = str.find(pattern, last_end);
@@ -55,9 +55,22 @@ lix::exec::module build_string_basemod() {
                                  }
                              }
                              auto mov_first = std::make_move_iterator(parts.begin());
-                             auto mov_last = std::make_move_iterator(parts.end());
+                             auto mov_last  = std::make_move_iterator(parts.end());
                              return lix::list(mov_first, mov_last);
                          }));
+    mod.add_function("replace",
+                     lix::wrap_function([](lix::string        subject,
+                                           const lix::string& pattern,
+                                           const lix::string& repl) -> lix::string {
+                         lix::string::size_type pos         = 0;
+                         const auto             pattern_len = pattern.size();
+                         const auto             repl_len    = repl.size();
+                         while ((pos = subject.find(pattern, pos)) != subject.npos) {
+                             subject = subject.replace(pos, pattern_len, repl);
+                             pos += repl_len;
+                         }
+                         return subject;
+                     }));
     return mod;
 }
 
