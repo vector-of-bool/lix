@@ -1,8 +1,8 @@
 #include <lix/eval.hpp>
 #include <lix/libs/libs.hpp>
 
-#include <iostream>
 #include <fstream>
+#include <iostream>
 
 namespace {
 int run_istream(std::istream& in) {
@@ -11,7 +11,7 @@ int run_istream(std::istream& in) {
     std::copy(iter(in), iter{}, std::back_inserter(code));
     try {
         auto ctx = lix::libs::create_context<lix::libs::Enum, lix::libs::IO>();
-        auto rc = lix::eval(code, ctx);
+        auto rc  = lix::eval(code, ctx);
         std::cout << rc << '\n';
     } catch (const std::exception& e) {
         std::cerr << "FAIL: " << e.what() << '\n';
@@ -21,7 +21,9 @@ int run_istream(std::istream& in) {
 }
 }  // namespace
 
-int main(int argc, char** argv) {
+namespace lix {
+
+int eval_main(int argc, char** argv, char** = nullptr) {
     if (argc == 2) {
         std::ifstream in{argv[1]};
         if (!in) {
@@ -33,3 +35,7 @@ int main(int argc, char** argv) {
         return run_istream(std::cin);
     }
 }
+
+}  // namespace lix
+
+// int main(int argc, char** argv) { return lix::eval_main(argc, argv); }

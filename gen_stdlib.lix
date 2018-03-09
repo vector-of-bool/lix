@@ -1,0 +1,78 @@
+defmodule GenerateStdlibFile do
+  def main(argv) do
+    args = parse_argv(argv)
+    generate(args)
+  end
+
+  def hpp_template, do: """
+  #ifndef LIX_LIBS_@MODNAME@_HPP_INCLUDED
+  #define LIX_LIBS_@MODNAME@_HPP_INCLUDED
+
+  #include <lix/exec/context.hpp>
+
+  namespace lix::libs {
+
+  struct @MODNAME@ { static void eval(lix::exec::context&); };
+
+  } // namespace lix::libs
+
+  #endif // LIX_LIBS_@MODNAME@_HPP_INCLUDED
+  """
+
+  def cpp_template, do: """
+  #include "@MODNAME@.hpp"
+
+  #include <lix/eval.hpp>
+  #include <lix/util/args.hpp>
+
+  @EXTRA_CODE@
+
+  namespace {
+
+  const char* module_code = R"code(
+
+  @MODCODE@
+
+  )code";
+
+  }
+
+  void lix::libs::@MODNAME@::eval(lix::exec::context& ctx) {
+      @EXTRA_CALL@;
+      lix::eval(module_code, ctx);
+  }
+  """
+
+  def parse_argv(kws), do: parse_argv(kws, %{})
+  def parse_argv(["--in-lib"|[libfile|tail]], acc),
+    do: parse_argv(tail, Map.put(acc, :libfile, libfile))
+  def parse_argv(["--out-hpp"|[filepath|tail]], acc),
+    do: parse_argv(tail, Map.put(acc, :out_hpp, filepath))
+  def parse_argv(["--out-cpp"|[filepath|tail]], acc),
+    do: parse_argv(tail, Map.put(acc, :out_cpp, filepath))
+  def parse_argv([], ret), do: ret
+
+  def generate(args) do
+    [_basename, libname] = Regex.run("(.*)\\.lix$", Path.basename(args.libfile))
+    extra_cpp_path = args.libfile + ".extra.cpp"
+    {extra_cpp_code, extra_call} = case File.exists?(extra_cpp_path) do
+      true -> {File.read!(extra_cpp_path), "::do_extra(ctx)"}
+      false -> {"", ""}
+    end
+    mod_code = File.read!(args.libfile)
+
+    replace = fn instr ->
+      instr
+        |> String.replace("@MODNAME@", libname)
+        |> String.replace("@MODCODE@", mod_code)
+        |> String.replace("@EXTRA_CODE@", extra_cpp_code)
+        |> String.replace("@EXTRA_CALL@", extra_call)
+    end
+    hpp_content = replace.(hpp_template())
+    cpp_content = replace.(cpp_template())
+    File.write!(args.out_hpp, hpp_content)
+    File.write!(args.out_cpp, cpp_content)
+  end
+end
+
+GenerateStdlibFile.main(Pew.Script.argv)

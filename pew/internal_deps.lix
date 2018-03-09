@@ -1,0 +1,26 @@
+defmodule Pew.Deps.Embedded do
+  def generate(project, btups, name, version, opts) do
+    dep_root = Path.absname(name, project.root)
+    Pew.info ["Loading embedded dependency ", name, " from ", dep_root]
+    case File.stat(dep_root) do
+      {:error, what} ->
+        raise {"Invalid dependency directory", dep_root, what}
+      {:ok, stat} ->
+        case stat.type do
+          :file -> raise {"Dependency path is a file", dep_root}
+          :directory ->
+            type = Keyword.get(opts, :type, :header)
+            generate_for_dir(dep_root, type, opts)
+          o -> raise {"Invalid dependency directory", dep_root}
+        end
+    end
+  end
+
+  def generate_for_dir(dir_path, :header, opts) do
+    inc_dir_tail = Keyword.get(opts, :include, "include")
+    inc_dir = Path.absname(inc_dir_tail, dir_path)
+    %{
+      includes: [inc_dir]
+    }
+  end
+end

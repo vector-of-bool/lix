@@ -1,0 +1,53 @@
+defmodule Pewfile do
+  def project do
+    [
+      name: "lix",
+      version: "0.0.1",
+      src: "source",
+      priv_deps: deps(),
+      gen: fn root -> gen(root) end,
+      entry_points: [
+        console: [
+          {"pew-eval", cxx: "lix::eval_main"}
+        ]
+      ]
+    ]
+  end
+
+  def deps do
+    [
+      {"PEGTL", "2.3.3", :dir},
+      {"extern/hamt", "~", :embedded, include: "."},
+    ]
+  end
+
+  def gen(root) do
+    Path.list_dir_r(Path.join(root, "source/lix/libs"))
+    |> Enum.filter(&(Path.extname(&1) == ".lix"))
+    |> Enum.map(&gen_stdlib_one(root, &1))
+  end
+
+  def gen_stdlib_one(root, libfile) do
+    cpp_extra = libfile + ".extra.cpp"
+    inputs = case File.exists?(cpp_extra) do
+      true -> [libfile, cpp_extra]
+      false -> [libfile]
+    end
+    [_basename, libname] = Regex.run("(.*).lix$", Path.basename(libfile))
+    gen_script = Path.join(root, "gen_stdlib.lix")
+    genroot = Path.join(root, "_gen")
+    out_cpp = Path.join(genroot, "lix/libs/" + libname + ".cpp")
+    out_hpp = Path.join(genroot, "lix/libs/" + libname + ".hpp")
+    %{
+      outputs: [out_cpp, out_hpp],
+      inputs: inputs,
+      command: [
+        Pew.executable, "--script", gen_script,
+        "--in-lib", libfile,
+        "--out-hpp", out_hpp,
+        "--out-cpp", out_cpp
+      ],
+      description: "Generate standard library file " + libname,
+    }
+  end
+end

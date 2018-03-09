@@ -1,0 +1,8 @@
+defmodule Pewfile do
+  def project do
+    [
+      name: "PEGTL",
+      version: "2.3.3",
+    ]
+  end
+end
