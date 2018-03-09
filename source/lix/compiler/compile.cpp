@@ -392,9 +392,25 @@ struct block_compiler {
             } else if (lhs_str == "quote") {
                 return _compile_quote(args);
             } else if (lhs_str == "is_list") {
-                assert(args.nodes.size() == 1);
+                if (args.nodes.size() != 1) {
+                    throw compile_error{"`is_list` expects a single argument", meta};
+                }
                 auto rhs_slot = compile(args.nodes[0]);
                 builder.push_instr(is::is_list{rhs_slot});
+                return consume_slot();
+            } else if (lhs_str == "is_symbol") {
+                if (args.nodes.size() != 1) {
+                    throw compile_error{"`is_symbol` expects a single argument", meta};
+                }
+                auto rhs_slot = compile(args.nodes[0]);
+                builder.push_instr(is::is_symbol{rhs_slot});
+                return consume_slot();
+            } else if (lhs_str == "is_string") {
+                if (args.nodes.size() != 1) {
+                    throw compile_error{"`is_string` expects a single argument", meta};
+                }
+                auto rhs_slot = compile(args.nodes[0]);
+                builder.push_instr(is::is_string{rhs_slot});
                 return consume_slot();
             } else if (lhs_str == "to_string") {
                 if (args.nodes.size() != 1) {

@@ -170,6 +170,12 @@ struct debug {};
 struct is_list {
     slot_ref_t arg;
 };
+struct is_symbol {
+    slot_ref_t arg;
+};
+struct is_string {
+    slot_ref_t arg;
+};
 struct to_string {
     slot_ref_t arg;
 };
@@ -224,6 +230,8 @@ using any_var = std::variant<ret,
                              no_clause,
                              dot,
                              is_list,
+                             is_symbol,
+                             is_string,
                              to_string,
                              inspect,
                              apply,

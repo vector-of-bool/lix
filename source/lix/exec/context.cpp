@@ -15,7 +15,7 @@ public:
     void register_module(const std::string& name, module mod) {
         const auto did_insert = _modules.emplace(name, std::move(mod)).second;
         if (!did_insert) {
-            throw std::runtime_error{"Double-registered module"};
+            throw std::runtime_error{"Double-registered module: " + name};
         }
     }
 };

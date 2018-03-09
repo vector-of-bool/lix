@@ -472,11 +472,14 @@ struct lit_tall_sym : pegtl::list<cls_tall_sym_elem, one<'.'>> {};
 // A small symbol is just a sequence of symbol chars prefixed by a colon
 struct lit_small_sym : seq<one<':'>, plus<cls_sym_char>> {};
 
+// A quoted symbol is just like a string with a leading quote (defined below)
+struct lit_quote_sym;
+
 /**
  * We don't usually make distinction between tall symbols and small ones in the
  * grammar. They're often interchangable
  */
-struct lit_symbol : sor<lit_tall_sym, lit_small_sym> {};
+struct lit_symbol : sor<lit_tall_sym, lit_small_sym, lit_quote_sym> {};
 
 // Helper for parsing with digit separators
 template <typename Digit>
@@ -760,6 +763,11 @@ struct lit_raw_string
 
 struct lit_string
     : sor<lit_raw_string<'\''>, lit_string_<'\''>, lit_raw_string<'"'>, lit_string_<'\"'>> {};
+
+// Now that we have lit_string, we define a quoted symbol based on a lit_string
+struct lit_quote_sym : seq<one<':'>, lit_string> {};
+
+// Special atoms need no prefix:
 struct lit_special_atom : sor<KW("nil"), KW("true"), KW("false")> {};
 
 struct ex_var : seq<identifier, not_at<hspace, sor<one<'('>, single_ex>>> {};
@@ -1333,6 +1341,13 @@ MARK_LOGGED(rhs);
 ACTION(identifier) { st.push(symbol(in.string())); }
 ACTION(lit_tall_sym) { st.push(symbol(in.string())); }
 ACTION(lit_small_sym) { st.push(symbol(in.string().substr(1))); }
+ACTION(lit_quote_sym) {
+    // Convert the string node to a symbol node
+    auto top = st.pop();
+    auto sym_str = top.as_string();
+    assert(sym_str && "Bad lit_quote_sym parsing");
+    st.push(symbol(*sym_str));
+}
 ACTION(lit_special_atom) { st.push(symbol(in.string())); }
 // TODO: Remove digit separators from strings:
 ACTION(lit_int) {

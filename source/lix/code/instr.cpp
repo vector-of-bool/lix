@@ -48,9 +48,7 @@ struct code_ostream_visitor {
     void operator()(is::negate n) { o << std::setw(13) << "negate  " << n.arg; }
     void operator()(is::const_int i) { o << std::setw(13) << "const_int  " << i.value; }
     void operator()(is::const_real r) { o << std::setw(13) << "const_real  " << r.value; }
-    void operator()(is::const_symbol sym) {
-        o << std::setw(13) << "const_sym  " << sym.sym;
-    }
+    void operator()(is::const_symbol sym) { o << std::setw(13) << "const_sym  " << sym.sym; }
     void operator()(const is::const_str& str) {
         o << std::setw(13) << "const_str  " << '"' << str.string << '"';
     }
@@ -116,6 +114,8 @@ struct code_ostream_visitor {
     void operator()(is::jump j) { o << std::setw(13) << "jump  " << j.target; }
     void operator()(is::test_true t) { o << std::setw(13) << "test_true  " << t.slot; }
     void operator()(is::is_list i) { o << std::setw(13) << "is_list  " << i.arg; }
+    void operator()(is::is_symbol i) { o << std::setw(13) << "is_symbol  " << i.arg; }
+    void operator()(is::is_string i) { o << std::setw(13) << "is_string  " << i.arg; }
     void operator()(is::to_string i) { o << std::setw(13) << "to_string  " << i.arg; }
     void operator()(is::inspect i) { o << std::setw(13) << "inspect  " << i.arg; }
     void operator()(is::raise r) { o << std::setw(13) << "raise  " << r.arg; }

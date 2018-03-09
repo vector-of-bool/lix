@@ -607,9 +607,25 @@ public:
     void execute(is::is_list i) {
         auto& arg = ex.nth(i.arg);
         if (arg.as_list()) {
-            ex.push("true"_sym);
+            ex.push(sym.true_);
         } else {
-            ex.push("false"_sym);
+            ex.push(sym.false_);
+        }
+    }
+    void execute(is::is_symbol i) {
+        auto& arg = ex.nth(i.arg);
+        if (arg.as_symbol()) {
+            ex.push(sym.true_);
+        } else {
+            ex.push(sym.false_);
+        }
+    }
+    void execute(is::is_string i) {
+        auto& arg = ex.nth(i.arg);
+        if (arg.as_string()) {
+            ex.push(sym.true_);
+        } else {
+            ex.push(sym.false_);
         }
     }
     void execute(is::to_string t) {
