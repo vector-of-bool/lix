@@ -65,6 +65,8 @@ public:
               typename = typename std::iterator_traits<Iterator>::difference_type>
     inline list(Iterator first, EndIter last);
 
+    [[nodiscard]] static list concat(const list& lhs, const list& rhs);
+
     [[nodiscard]] inline list                             pop_front() const noexcept;
     [[nodiscard]] inline std::pair<lix::value, lix::list> take_front() const noexcept;
     [[nodiscard]] inline list                             push_front(lix::value&&) const noexcept;

@@ -43,6 +43,7 @@ struct code_ostream_visitor {
         o << std::setw(13) << "push_front  " << c.elem << ", " << c.list;
     }
     void operator()(is::eq e) { o << std::setw(13) << "eq  " << e.a << ", " << e.b; }
+    void operator()(is::concat c) { o << std::setw(13) << "concat  " << c.a << ", " << c.b; }
     void operator()(is::neq e) { o << std::setw(13) << "neq  " << e.a << ", " << e.b; }
     void operator()(is::negate n) { o << std::setw(13) << "negate  " << n.arg; }
     void operator()(is::const_int i) { o << std::setw(13) << "const_int  " << i.value; }

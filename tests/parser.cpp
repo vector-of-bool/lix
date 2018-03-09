@@ -115,6 +115,7 @@ TEST_CASE("Parse a simple literal", "[parser]") {
         {"%{}", "{:%{}, [], []}"},
         {"%{foo: 1}", "{:%{}, [], [{:foo, 1}]}"},
         {"%{:foo => 1}", "{:%{}, [], [{:foo, 1}]}"},
+        {":'quoted'", ":quoted"},
     };
     for (auto [code, canon] : pairs) {
         INFO(code);

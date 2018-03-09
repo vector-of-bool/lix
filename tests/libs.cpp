@@ -25,6 +25,8 @@ TEST_CASE("Create a context with libraries") {
             [2, 3]
         ])
 
+        [1, 2, 3, 4] = [1, 2] ++ [3, 4]
+
         true = String.contains?("Hello, world!", "world!")
         false = String.contains?("Hello, world!", "Eggs")
 

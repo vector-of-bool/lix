@@ -338,6 +338,12 @@ struct block_compiler {
             } else if (lhs_str == "=") {
                 _check_binary(args);
                 return _compile_assign(args.nodes, meta);
+            } else if (lhs_str == "++") {
+                _check_binary(args);
+                auto lhs_slot = compile(args.nodes[0]);
+                auto rhs_slot = compile(args.nodes[1]);
+                builder.push_instr(is::concat{lhs_slot, rhs_slot});
+                return consume_slot();
             } else if (lhs_str == "__block__") {
                 assert(args.nodes.size() != 0 && "Invalid block. Needs at least one expression");
                 auto       ret      = invalid_slot;

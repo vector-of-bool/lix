@@ -362,6 +362,17 @@ public:
         ex.push(are_equal ? sym.false_ : sym.true_);
     }
 
+    void execute(is::concat cc) {
+        auto& lhs      = ex.nth(cc.a);
+        auto& rhs      = ex.nth(cc.b);
+        auto  lhs_list = lhs.as_list();
+        auto  rhs_list = rhs.as_list();
+        if (!lhs_list || !rhs_list) {
+            _raise_tuple("einval"_sym, "++"_sym, lhs, rhs);
+        }
+        ex.push(lix::list::concat(*lhs_list, *rhs_list));
+    }
+
     void execute(is::negate n) {
         auto& val     = ex.nth(n.arg);
         auto  arg_sym = val.as_symbol();

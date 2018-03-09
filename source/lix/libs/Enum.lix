@@ -57,11 +57,11 @@ defmodule Enum do
   end
 
   def flatten(list) do
-    reverse reduce(list, [], fn
+    reduce(list, [], fn
       el, acc ->
         cond do
           is_list(el) ->
-            reduce(el, acc, fn el2, acc2 -> [el2|acc2] end)
+            acc ++ el
           true ->
             raise {:badarg, {"Elements to Enum.flatten list must also be lists", el}}
         end

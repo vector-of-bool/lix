@@ -49,6 +49,10 @@ struct neq {
     slot_ref_t a;
     slot_ref_t b;
 };
+struct concat {
+    slot_ref_t a;
+    slot_ref_t b;
+};
 struct negate {
     slot_ref_t arg;
 };
@@ -192,6 +196,7 @@ using any_var = std::variant<ret,
                              div,
                              eq,
                              neq,
+                             concat,
                              negate,
                              const_int,
                              const_real,
